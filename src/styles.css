@@ -1,0 +1,188 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #202123;
+  background: #f7f7f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+}
+
+.page-shell {
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.hero {
+  max-width: 680px;
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #5f6b65;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 16px;
+  font-size: clamp(2.4rem, 7vw, 4.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+h2 {
+  margin-bottom: 10px;
+  font-size: 1.45rem;
+}
+
+.intro,
+.export-card p,
+.next-steps {
+  color: #555d59;
+  line-height: 1.7;
+}
+
+.export-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: center;
+  padding: 28px;
+  border: 1px solid #deded9;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(31, 35, 33, 0.08);
+}
+
+.export-control {
+  min-width: 220px;
+  text-align: right;
+}
+
+.export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 18px;
+  border: 1px solid #1f2421;
+  border-radius: 12px;
+  color: #ffffff;
+  background: #1f2421;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.export-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.export-button:focus-visible {
+  outline: 3px solid #8bc6ad;
+  outline-offset: 3px;
+}
+
+.export-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.status {
+  min-height: 21px;
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+}
+
+.status-success {
+  color: #236241;
+}
+
+.status-error {
+  color: #a52b2b;
+}
+
+.next-steps {
+  margin-top: 36px;
+  padding: 0 8px;
+}
+
+.next-steps ol {
+  padding-left: 22px;
+}
+
+@media (max-width: 700px) {
+  .page-shell {
+    padding: 42px 0;
+  }
+
+  .export-card {
+    grid-template-columns: 1fr;
+  }
+
+  .export-control {
+    min-width: 0;
+    text-align: left;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #f3f3ef;
+    background: #181a19;
+  }
+
+  .eyebrow,
+  .intro,
+  .export-card p,
+  .next-steps {
+    color: #adb6b1;
+  }
+
+  .export-card {
+    border-color: #3a403d;
+    background: #222624;
+    box-shadow: none;
+  }
+
+  .export-button {
+    border-color: #f3f3ef;
+    color: #171918;
+    background: #f3f3ef;
+  }
+
+  .status-success {
+    color: #8bd4ad;
+  }
+
+  .status-error {
+    color: #ff9c9c;
+  }
+}
