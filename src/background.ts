@@ -1,6 +1,7 @@
 import { createProjectArchive } from './chatgpt/projectExport'
 import type { ExportedProjectChat, ProjectExportError } from './chatgpt/projectTypes'
 import { safeChatGptUrl } from './chatgpt/projectReader'
+import { parseChatGptChatUrl, projectIdFromChatGptUrl } from './chatgpt/chatUrl'
 import { isCancelProjectExportMessage, isDownloadArchiveMessage, isStartProjectExportMessage, type DownloadArchiveResponse, type ExtractCurrentChatMessage, type ExtractCurrentChatResponse, type ProjectExportProgressMessage, type ProjectExportResult, type StartProjectExportMessage } from './types/extensionMessages'
 
 interface Job { cancelled: boolean; tabs: Set<number> }
@@ -11,13 +12,17 @@ function base64(value: string): boolean { return value.length > 0 && value.lengt
 function progress(exportId: string, completed: number, total: number, status: ProjectExportProgressMessage['status'], currentChatTitle?: string): void { void chrome.runtime.sendMessage<ProjectExportProgressMessage, unknown>({ type: 'PROJECT_EXPORT_PROGRESS', exportId, completed, total, status, currentChatTitle }).catch(() => undefined) }
 async function close(job: Job, tabId: number): Promise<void> { job.tabs.delete(tabId); await chrome.tabs.remove(tabId).catch(() => undefined) }
 async function extract(reference: StartProjectExportMessage['project']['chats'][number], job: Job): Promise<ExportedProjectChat> {
-  const url = safeChatGptUrl(reference.url); if (!url) throw new Error('invalid-url')
-  const tab = await chrome.tabs.create({ url: url.href, active: false }); if (tab.id === undefined) throw new Error('tab')
+  const parsed = parseChatGptChatUrl(reference.url); if (!parsed) throw new Error('invalid-url')
+  const tab = await chrome.tabs.create({ url: parsed.url, active: false }); if (tab.id === undefined) throw new Error('tab')
   job.tabs.add(tab.id)
   try {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline) {
       if (job.cancelled) throw new Error('cancelled')
-      try { const response = await Promise.race([chrome.tabs.sendMessage<ExtractCurrentChatMessage, ExtractCurrentChatResponse>(tab.id, { type: 'EXTRACT_CURRENT_CHAT' }), delay(10_000).then(() => { throw new Error('timeout') })]); if (response.ok && response.conversation.messages.length) return { reference, conversation: response.conversation, exportedAt: new Date().toISOString() } } catch { await delay(100) }
+      const current = await chrome.tabs.get(tab.id).catch(() => undefined)
+      if (current?.status !== 'complete') { await delay(100); continue }
+      try { const response = await Promise.race([chrome.tabs.sendMessage<ExtractCurrentChatMessage, ExtractCurrentChatResponse>(tab.id, { type: 'EXTRACT_CURRENT_CHAT' }), delay(2_000).then(() => { throw new Error('timeout') })]); if (response?.ok && response.conversation.messages.length) return { reference, conversation: response.conversation, exportedAt: new Date().toISOString() } } catch { /* Content script may still be starting. */ }
+      await delay(200)
     }
     throw new Error('timeout')
   } finally { await close(job, tab.id) }
@@ -45,7 +50,12 @@ async function run(message: StartProjectExportMessage): Promise<ProjectExportRes
 }
 export function handleExtensionMessage(message: unknown, _sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void): boolean | undefined {
   if (isCancelProjectExportMessage(message)) { const job = jobs.get(message.exportId); if (job) { job.cancelled = true; void Promise.all([...job.tabs].map((id) => close(job, id))) } sendResponse({ ok: true }); return false }
-  if (typeof message === 'object' && message !== null && (message as Record<string, unknown>).type === 'START_PROJECT_EXPORT') { if (!isStartProjectExportMessage(message) || !safeChatGptUrl(message.project.url) || message.project.chats.some((chat) => !safeChatGptUrl(chat.url))) { sendResponse({ ok: false, errorCode: 'INVALID_REQUEST', message: 'Die Projekt-Export-Anfrage ist ungültig.' }); return false } void run(message).then(sendResponse); return true }
+  if (typeof message === 'object' && message !== null && (message as Record<string, unknown>).type === 'START_PROJECT_EXPORT') {
+    const projectId = isStartProjectExportMessage(message) ? projectIdFromChatGptUrl(message.project.url) : undefined
+    const invalidChat = isStartProjectExportMessage(message) && message.project.chats.some((chat) => { const parsed = parseChatGptChatUrl(chat.url); return !parsed || (projectId ? parsed.projectId !== projectId : false) })
+    if (!isStartProjectExportMessage(message) || !safeChatGptUrl(message.project.url) || invalidChat) { sendResponse({ ok: false, errorCode: 'INVALID_REQUEST', message: 'Die Projekt-Export-Anfrage ist ungültig.' } satisfies ProjectExportResult); return false }
+    void run(message).then(sendResponse).catch(() => sendResponse({ ok: false, errorCode: 'EXPORT_FAILED', message: 'Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.' } satisfies ProjectExportResult)); return true
+  }
   if (typeof message !== 'object' || message === null || (message as Record<string, unknown>).type !== 'DOWNLOAD_ARCHIVE') return undefined
   if (!isDownloadArchiveMessage(message) || !safeZip(message.filename) || !base64(message.base64)) { const response: DownloadArchiveResponse = { ok: false, error: 'Die Download-Anfrage ist ungültig.' }; sendResponse(response); return false }
   void chrome.downloads.download({ url: `data:application/zip;base64,${message.base64}`, filename: message.filename, saveAs: true }).then((downloadId) => sendResponse({ ok: true, downloadId } satisfies DownloadArchiveResponse)).catch((error: unknown) => sendResponse({ ok: false, error: error instanceof Error && /permission/i.test(error.message) ? 'Die Download-Berechtigung fehlt.' : 'Der Download konnte nicht gestartet werden.' } satisfies DownloadArchiveResponse)); return true
