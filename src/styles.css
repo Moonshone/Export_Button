@@ -15,8 +15,8 @@ h1 { margin: 0; font-size: 1.22rem; }
 .local-note { display: flex; gap: 9px; margin: 0; padding: 12px; border-radius: 9px; color: #315449; background: #e5f2ed; font-size: .82rem; line-height: 1.45; }
 .local-note span { color: #268366; }
 .export-control { display: grid; gap: 8px; }
-.export-button { width: 100%; min-height: 48px; padding: 10px 16px; border: 1px solid #185b48; border-radius: 10px; color: #fff; background: #185b48; font-weight: 750; cursor: pointer; }
-.export-button:hover:not(:disabled) { background: #104b3b; }
+.export-button { width: 100%; min-height: 48px; padding: 10px 16px; border: 1px solid #3f3f46; border-radius: 10px; color: #fff; background: #3f3f46; font-weight: 750; cursor: pointer; }
+.export-button:hover:not(:disabled) { background: #27272a; }
 .export-button span { margin-right: 8px; }
 .export-button:disabled { cursor: not-allowed; opacity: .65; }
 .export-status, .status-error { min-height: 1.4em; margin: 0; font-size: .82rem; line-height: 1.4; text-align: center; }
@@ -28,8 +28,8 @@ h1 { margin: 0; font-size: 1.22rem; }
   .statistics div { border-color: #44524b; background: #202925; }
   .statistics dd { color: #72d2af; }
   .local-note { color: #c6e6da; background: #213b32; }
-  .export-button { border-color: #72d2af; color: #10271f; background: #72d2af; }
-  .export-button:hover:not(:disabled) { background: #91dec2; }
+  .export-button { border-color: #52525b; color: #fff; background: #52525b; }
+  .export-button:hover:not(:disabled) { background: #3f3f46; }
   .export-status { color: #91dec2; }
   .status-error { color: #ffb3b3; }
 }
