@@ -35,17 +35,10 @@ npm run build
 
 ## Lokaler Export
 
-Der aktuelle Prototyp exportiert Beispiel-Chats als ZIP-Datei. Die ZIP-Datei enthaelt:
+Die Anwendung exportiert die im Browser gespeicherten Chats als ZIP-Datei. Die ZIP-Datei enthaelt:
 
 - `conversations.json`
 - `manifest.json`
 - `README.txt`
 
 Die Datei wird vollstaendig im Browser erzeugt. Es werden keine Chatdaten an einen Server gesendet.
-
-## Naechste Schritte
-
-1. Chatdaten in `localStorage` speichern.
-2. Chat-Oberflaeche ergaenzen.
-3. Importfunktion entwickeln.
-4. Optional einen Speichern-unter-Dialog fuer unterstuetzte Browser anbieten.
