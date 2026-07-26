@@ -12,6 +12,10 @@ Object.defineProperty(globalThis, 'chrome', {
   value: {
     storage: { local },
     downloads: { download: vi.fn().mockResolvedValue(1) },
+    runtime: {
+      sendMessage: vi.fn().mockResolvedValue({ ok: true, downloadId: 1 }),
+      onMessage: { addListener: vi.fn() },
+    },
   },
 })
 
@@ -23,4 +27,5 @@ beforeEach(() => {
   local.set.mockReset().mockResolvedValue(undefined)
   local.remove.mockReset().mockResolvedValue(undefined)
   vi.mocked(chrome.downloads.download).mockReset().mockResolvedValue(1)
+  vi.mocked(chrome.runtime.sendMessage).mockReset().mockResolvedValue({ ok: true, downloadId: 1 })
 })
