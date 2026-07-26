@@ -22,6 +22,10 @@ h1 { margin: 0; font-size: 1.22rem; }
 .export-status, .status-error { min-height: 1.4em; margin: 0; font-size: .82rem; line-height: 1.4; text-align: center; }
 .export-status { color: #26634f; }
 .status-error { color: #a12c2c; }
+.popup-toasts { min-height: 2px; }
+.popup-toast { display: flex; gap: 8px; align-items: flex-start; padding: 9px; border-left: 4px solid #3578b8; border-radius: 7px; background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 12%); font-size: .82rem; overflow-wrap: anywhere; }
+.popup-toast.success { border-color: #087a58; } .popup-toast.warning { border-color: #ba7400; } .popup-toast.error { border-color: #b42318; }
+.popup-toast button { margin-left: auto; border: 0; background: transparent; color: inherit; cursor: pointer; }
 @media (prefers-color-scheme: dark) {
   :root { color: #edf3f0; background: #151c19; }
   .eyebrow { color: #acb8b2; }
@@ -32,4 +36,5 @@ h1 { margin: 0; font-size: 1.22rem; }
   .export-button:hover:not(:disabled) { background: #3f3f46; }
   .export-status { color: #91dec2; }
   .status-error { color: #ffb3b3; }
+  .popup-toast { background: #202925; }
 }

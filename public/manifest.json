@@ -5,8 +5,10 @@
   "description": "Exportiert die aktuell geöffnete ChatGPT-Unterhaltung lokal.",
   "permissions": [
     "storage",
-    "downloads"
+    "downloads",
+    "tabs"
   ],
+  "host_permissions": ["https://chatgpt.com/*"],
   "background": {
     "service_worker": "background.js"
   },

@@ -6,8 +6,8 @@ import type { VisibleConversation } from './conversationReader'
 const conversation: VisibleConversation = {
   title: 'Titel: Test', url: 'https://chatgpt.com/c/123',
   messages: [
-    { role: 'user', content: 'Frage mit Umlaut: Grüße 👋', position: 1 },
-    { role: 'assistant', content: 'Antwort 😄', position: 2 },
+    { role: 'user', content: 'Frage mit Umlaut: Grüße 👋', position: 1, codeBlocks: [], fileReferences: [] },
+    { role: 'assistant', content: 'Antwort 😄', position: 2, codeBlocks: [], fileReferences: [] },
   ],
 }
 const date = new Date('2026-07-26T12:34:00.000Z')

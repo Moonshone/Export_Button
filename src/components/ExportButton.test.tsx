@@ -33,7 +33,7 @@ describe('ExportButton', () => {
     render(<ExportButton conversations={[]} />)
     const button = screen.getByRole('button', { name: 'Daten exportieren' })
     await user.dblClick(button)
-    expect(screen.getByRole('button', { name: 'Export wird erstellt …' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Daten exportieren' })).toBeDisabled()
     expect(exportService.createChatExport).toHaveBeenCalledTimes(1)
     finish(archive)
     expect(await screen.findByText('Der Download wurde gestartet.')).toBeInTheDocument()

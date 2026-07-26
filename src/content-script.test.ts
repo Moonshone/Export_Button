@@ -51,17 +51,19 @@ describe('ChatGPT Content Script', () => {
     }))
     expect(chrome.downloads.download).not.toHaveBeenCalled()
     expect(fetchSpy).not.toHaveBeenCalled()
-    expect(button).toHaveTextContent('Download wurde gestartet.')
+    expect(button).toHaveTextContent('Aktuellen Chat exportieren')
+    expect(button.getRootNode()).toHaveTextContent('Der Download wurde gestartet.')
   })
 
   it('zeigt leere Unterhaltungen und Service-Worker-Fehler verständlich an', async () => {
     document.querySelector('main')!.innerHTML = ''
     ensureExportButton(); await exportCurrentConversation(getButton())
-    expect(getButton()).toHaveTextContent('In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.')
+    expect(getButton()).toHaveTextContent('Aktuellen Chat exportieren')
+    expect(getButton().getRootNode()).toHaveTextContent('In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.')
     document.querySelector('main')!.innerHTML = '<div data-message-author-role="assistant">Antwort</div>'
     vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({ ok: false, error: 'Der Download konnte nicht gestartet werden.' })
     await exportCurrentConversation(getButton())
-    expect(getButton()).toHaveTextContent('Der Download konnte nicht gestartet werden.')
+    expect(getButton().getRootNode()).toHaveTextContent('Der Download konnte nicht gestartet werden.')
     expect(getButton()).not.toHaveTextContent('intern')
   })
 
@@ -69,7 +71,7 @@ describe('ChatGPT Content Script', () => {
     ensureExportButton()
     vi.mocked(chrome.runtime.sendMessage).mockRejectedValueOnce(new Error('Receiving end does not exist'))
     await exportCurrentConversation(getButton())
-    expect(getButton()).toHaveTextContent('Der Service Worker ist nicht erreichbar.')
+    expect(getButton().getRootNode()).toHaveTextContent('Der Export konnte nicht erstellt werden. Bitte versuche es erneut.')
     expect(getButton()).not.toHaveTextContent('Receiving end')
     expect(getButton()).toBeEnabled()
   })
