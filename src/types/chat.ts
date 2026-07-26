@@ -7,9 +7,6 @@ export interface Message {
   createdAt: string
 }
 
-// Bestehende Importe bleiben kompatibel, waehrend das Datenmodell `Message` heisst.
-export type ChatMessage = Message
-
 export interface Conversation {
   id: string
   title: string
