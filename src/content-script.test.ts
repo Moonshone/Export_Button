@@ -19,6 +19,16 @@ describe('ChatGPT Content Script', () => {
     expect(getButton()).toHaveAttribute('aria-label')
   })
 
+  it('verwendet die kompakte Darstellung ohne den Buttontext abzuschneiden', () => {
+    const host = ensureExportButton()
+    const styles = host.shadowRoot?.querySelector('style')?.textContent
+    expect(styles).toContain('max-width: min(175px, calc(100vw - 24px))')
+    expect(styles).toContain('padding: 7px 10px')
+    expect(styles).toContain('font: 600 11px/1.25 system-ui, sans-serif')
+    expect(styles).not.toContain('text-overflow')
+    expect(styles).not.toContain('white-space: nowrap')
+  })
+
   it('erzeugt auch nach einem Observer-Lauf keinen zweiten Button', async () => {
     const observer = startContentScript()
     document.querySelector('main')?.append(document.createElement('div'))
