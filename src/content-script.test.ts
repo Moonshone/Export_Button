@@ -82,6 +82,20 @@ describe('kontextabhängiger Exportbutton', () => {
     expect(button()).toHaveTextContent('Ganzes Projekt exportieren')
   })
 
+  it('zeigt auf der GPT-Detailseite sofort einen Button und wechselt bei Nachrichten denselben Button', async () => {
+    window.history.replaceState({}, '', '/g/g-69de136277f4819189aa21247ccb1538-english-lerncoach')
+    document.body.innerHTML = '<div role="main"><section><div contenteditable="true" data-placeholder="ChatGPT fragen"></div></section></div>'
+    startContentScript()
+    expect(button()).toHaveTextContent('GPT exportieren'); expect(button()).toBeVisible(); expect(button()).toBeEnabled()
+    expect(button()).toHaveAttribute('aria-busy', 'false'); expect(button()).toHaveAttribute('data-mode', 'gpt-idle')
+    document.querySelector('section')?.insertAdjacentHTML('afterbegin', '<h1>English Lerncoach</h1><article data-message-author-role="user">Hallo</article>')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
+    document.querySelector('article')?.remove(); updateButtonFromCurrentPageContext(); await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(button()).toHaveTextContent('GPT exportieren')
+    expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
+  })
+
   it('startet einen Chat-Download bei Doppelklick nur einmal', async () => {
     ensureExportButton()
     const first = exportCurrentConversation(button())
