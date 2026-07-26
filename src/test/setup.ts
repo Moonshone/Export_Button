@@ -12,7 +12,7 @@ Object.defineProperty(globalThis, 'chrome', {
   value: {
     storage: { local },
     downloads: { download: vi.fn().mockResolvedValue(1) },
-    tabs: { create: vi.fn().mockResolvedValue({ id: 10 }), remove: vi.fn().mockResolvedValue(undefined), sendMessage: vi.fn().mockResolvedValue({ ok: false, message: 'Nicht bereit' }) },
+    tabs: { create: vi.fn().mockResolvedValue({ id: 10 }), get: vi.fn().mockResolvedValue({ id: 10, status: 'complete' }), remove: vi.fn().mockResolvedValue(undefined), sendMessage: vi.fn().mockResolvedValue({ ok: false, message: 'Nicht bereit' }) },
     runtime: {
       sendMessage: vi.fn().mockResolvedValue({ ok: true, downloadId: 1 }),
       onMessage: { addListener: vi.fn() },
@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.mocked(chrome.downloads.download).mockReset().mockResolvedValue(1)
   vi.mocked(chrome.runtime.sendMessage).mockReset().mockResolvedValue({ ok: true, downloadId: 1 })
   vi.mocked(chrome.tabs.create).mockReset().mockResolvedValue({ id: 10 })
+  vi.mocked(chrome.tabs.get).mockReset().mockResolvedValue({ id: 10, status: 'complete' })
   vi.mocked(chrome.tabs.remove).mockReset().mockResolvedValue(undefined)
   vi.mocked(chrome.tabs.sendMessage).mockReset().mockResolvedValue({ ok: false, message: 'Nicht bereit' })
 })

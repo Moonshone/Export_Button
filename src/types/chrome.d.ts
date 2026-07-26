@@ -17,6 +17,7 @@ declare namespace chrome {
     interface Tab { id?: number; status?: string; url?: string }
     interface CreateProperties { url: string; active?: boolean }
     function create(properties: CreateProperties): Promise<Tab>
+    function get(tabId: number): Promise<Tab>
     function remove(tabId: number): Promise<void>
     function sendMessage<M, R>(tabId: number, message: M): Promise<R>
   }

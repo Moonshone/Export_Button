@@ -1,4 +1,4 @@
-import { CONTENT_BUTTON_ID, CONTENT_ROOT_ID, ensureExportButton, exportCurrentConversation, startContentScript } from './content-script'
+import { CONTENT_BUTTON_ID, CONTENT_ROOT_ID, ensureExportButton, exportCurrentConversation, exportProject, PROJECT_BUTTON_ID, startContentScript } from './content-script'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function getButton(): HTMLButtonElement {
@@ -82,5 +82,16 @@ describe('ChatGPT Content Script', () => {
     expect(getButton().getRootNode()).toHaveTextContent('Der Export konnte nicht erstellt werden. Bitte versuche es erneut.')
     expect(getButton()).not.toHaveTextContent('Receiving end')
     expect(getButton()).toBeEnabled()
+  })
+
+  it('startet bei einem Projekt ohne exportierbare Chats keinen Export', async () => {
+    window.history.replaceState({}, '', '/g/g-p-AAA')
+    document.body.innerHTML = '<main><h1>Leeres Projekt</h1></main>'
+    const host = ensureExportButton(); const button = host.shadowRoot?.getElementById(PROJECT_BUTTON_ID) as HTMLButtonElement
+    await exportProject(button)
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled()
+    expect(host.shadowRoot).toHaveTextContent('In diesem Projekt wurden keine exportierbaren Chats gefunden.')
+    expect(host.shadowRoot?.getElementById('cancel-project-export')).not.toBeVisible()
+    expect(button).toBeEnabled()
   })
 })

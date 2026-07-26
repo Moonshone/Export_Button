@@ -9,6 +9,8 @@ export const CONTENT_ROOT_ID = 'chat-export-extension-root'; export const CONTEN
 let exporting = false; let exportId: string | undefined; let observer: MutationObserver | undefined; let scheduled = false; let toasts: ToastManager | undefined
 const toast = (message: string, variant: 'info' | 'success' | 'warning' | 'error' | 'progress', id: string = crypto.randomUUID(), persistent = false) => toasts?.show({ id, groupId: id, message, variant, persistent })
 function busy(value: boolean): void { exporting = value; const shadow = document.getElementById(CONTENT_ROOT_ID)?.shadowRoot; shadow?.querySelectorAll<HTMLButtonElement>('.export-action').forEach((button) => { button.disabled = value; button.setAttribute('aria-busy', String(value)) }); const cancel = shadow?.getElementById('cancel-project-export') as HTMLButtonElement | null; if (cancel) cancel.hidden = !value || !exportId }
+function finishProjectExport(): void { if (exportId) toasts?.dismiss(exportId); exportId = undefined; busy(false) }
+function projectTimeout(chatCount: number): number { return Math.min(30 * 60_000, Math.max(60_000, chatCount * 45_000)) }
 
 export async function exportCurrentConversation(button: HTMLButtonElement): Promise<void> {
   if (exporting) return; busy(true)
@@ -26,10 +28,20 @@ export async function exportProject(trigger: HTMLButtonElement): Promise<void> {
   let project: ChatGptProject | undefined
   try { project = await discoverProject() } catch (error) { toasts?.dismiss('project-discovery'); toast(error instanceof ProjectChatLimitError ? error.message : 'Das Projekt konnte nicht analysiert werden.', 'error'); return }
   toasts?.dismiss('project-discovery'); if (!project) { toast('Auf dieser Seite wurde kein ChatGPT-Projekt erkannt.', 'warning'); return }
+  if (!project.chats.length) { toast('In diesem Projekt wurden keine exportierbaren Chats gefunden.', 'warning'); return }
   toast(`${project.chats.length} Projekt-Chats wurden gefunden.`, 'info'); const options = await dialog(project, trigger); if (!options) return
   exporting = true; exportId = crypto.randomUUID(); busy(true); toast('Projekt wird analysiert …', 'progress', exportId, true)
-  try { const result = await chrome.runtime.sendMessage<StartProjectExportMessage, ProjectExportResult>({ type: 'START_PROJECT_EXPORT', exportId, project, options }); toasts?.dismiss(exportId); if (!result.ok) toast(result.message, result.errorCode === 'CANCELLED' ? 'info' : 'error'); else if (result.failedChats) toast(`${result.exportedChats} von ${project.chats.length} Chats wurden exportiert. ${result.failedChats === 1 ? 'Ein Chat konnte nicht gelesen werden.' : `${result.failedChats} Chats konnten nicht gelesen werden.`}`, 'warning'); else toast('Der Projekt-Download wurde gestartet.', 'success')
-  } catch { toasts?.dismiss(exportId); toast('Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.', 'error') } finally { exportId = undefined; busy(false) }
+  const activeExportId = exportId
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('project-timeout')), projectTimeout(project.chats.length)) })
+    const result = await Promise.race([chrome.runtime.sendMessage<StartProjectExportMessage, ProjectExportResult>({ type: 'START_PROJECT_EXPORT', exportId, project, options }), timeout])
+    if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('invalid-response')
+    if (!result.ok) toast(result.message, result.errorCode === 'CANCELLED' ? 'info' : 'error'); else if (result.failedChats) toast(`${result.exportedChats} von ${project.chats.length} Chats wurden exportiert. ${result.failedChats === 1 ? 'Ein Chat konnte nicht gelesen werden.' : `${result.failedChats} Chats konnten nicht gelesen werden.`}`, 'warning'); else toast('Der Projekt-Download wurde gestartet.', 'success')
+  } catch (error) {
+    if (error instanceof Error && error.message === 'project-timeout') { void chrome.runtime.sendMessage<CancelProjectExportMessage, unknown>({ type: 'CANCEL_PROJECT_EXPORT', exportId: activeExportId }); toast('Der Projekt-Export hat zu lange gedauert und wurde beendet.', 'error') }
+    else toast('Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.', 'error')
+  } finally { if (timer) clearTimeout(timer); finishProjectExport() }
 }
 function progress(message: ProjectExportProgressMessage): void { if (!exportId || message.exportId !== exportId) return; const text = message.status === 'exporting' ? `Chat ${message.completed + 1} von ${message.total} wird exportiert: ${message.currentChatTitle ?? ''}` : message.status === 'packaging' ? 'ZIP-Datei wird erstellt …' : message.status === 'downloading' ? 'Download wird gestartet …' : 'Projekt wird analysiert …'; if (!['completed', 'cancelled', 'failed'].includes(message.status)) toast(text, 'progress', message.exportId, true) }
 export function ensureExportButton(documentRef: Document = document): HTMLElement {
