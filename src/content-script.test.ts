@@ -29,6 +29,14 @@ describe('ChatGPT Content Script', () => {
     expect(styles).not.toContain('white-space: nowrap')
   })
 
+  it('kapselt die dunkelgrauen Exportbutton-Zustände im Shadow DOM', () => {
+    const styles = ensureExportButton().shadowRoot?.querySelector('style')?.textContent
+    expect(styles).toContain('.export-action{border-color:#3f3f46;background:#3f3f46;color:#ffffff}')
+    expect(styles).toContain('.export-action:hover:not(:disabled){border-color:#27272a;background:#27272a}')
+    expect(styles).toContain('.export-action:active:not(:disabled){border-color:#18181b;background:#18181b}')
+    expect(styles).toContain('.export-action:disabled{border-color:#3f3f46;background:#3f3f46;cursor:wait;opacity:.65}')
+  })
+
   it('erzeugt auch nach einem Observer-Lauf keinen zweiten Button', async () => {
     const observer = startContentScript()
     document.querySelector('main')?.append(document.createElement('div'))
