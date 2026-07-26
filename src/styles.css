@@ -20,9 +20,7 @@ h1 { margin: 0; font-size: 1.22rem; }
 .export-button:active:not(:disabled) { border-color: #18181b; background: #18181b; }
 .export-button span { margin-right: 8px; }
 .export-button:disabled { border-color: #3f3f46; background: #3f3f46; cursor: not-allowed; opacity: .65; }
-.export-status, .status-error { min-height: 1.4em; margin: 0; font-size: .82rem; line-height: 1.4; text-align: center; }
-.export-status { color: #26634f; }
-.status-error { color: #a12c2c; }
+.status-error { min-height: 1.4em; margin: 0; color: #a12c2c; font-size: .82rem; line-height: 1.4; text-align: center; }
 .popup-toasts { min-height: 2px; }
 .popup-toast { display: flex; gap: 8px; align-items: flex-start; padding: 9px; border-left: 4px solid #3578b8; border-radius: 7px; background: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 12%); font-size: .82rem; overflow-wrap: anywhere; }
 .popup-toast.success { border-color: #087a58; } .popup-toast.warning { border-color: #ba7400; } .popup-toast.error { border-color: #b42318; }
@@ -37,7 +35,6 @@ h1 { margin: 0; font-size: 1.22rem; }
   .export-button:hover:not(:disabled) { border-color: #27272a; background: #27272a; }
   .export-button:active:not(:disabled) { border-color: #18181b; background: #18181b; }
   .export-button:disabled { border-color: #3f3f46; background: #3f3f46; }
-  .export-status { color: #91dec2; }
   .status-error { color: #ffb3b3; }
   .popup-toast { background: #202925; }
 }

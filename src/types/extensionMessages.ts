@@ -14,7 +14,7 @@ export type ExtractCurrentChatResponse = { ok: true; conversation: VisibleConver
 export type StartGptExportMessage = { type: 'START_GPT_EXPORT'; exportId: string; gpt: CustomGptExportData; options: GptExportOptions }
 export type CancelGptExportMessage = { type: 'CANCEL_GPT_EXPORT'; exportId: string }
 export type GptExportStatus = 'discovering' | 'reading-configuration' | 'reading-instructions' | 'reading-knowledge' | 'reading-capabilities' | 'reading-integrations' | 'packaging' | 'downloading' | 'completed' | 'cancelled' | 'failed'
-export type GptExportProgressMessage = { type: 'GPT_EXPORT_PROGRESS'; exportId: string; status: GptExportStatus; message?: string }
+export type GptExportProgressMessage = { type: 'GPT_EXPORT_PROGRESS'; exportId: string; status: GptExportStatus }
 export type GptExportResult = { ok: true; downloadId: number; complete: boolean; warningCount: number } | { ok: false; errorCode: string; message: string }
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
@@ -31,5 +31,5 @@ export function isCancelGptExportMessage(message: unknown): message is CancelGpt
 export function isStartGptExportMessage(message: unknown): message is StartGptExportMessage {
   if (!record(message) || message.type !== 'START_GPT_EXPORT' || typeof message.exportId !== 'string' || !record(message.gpt) || !record(message.options)) return false
   const options = message.options
-  return message.exportId.length > 5 && typeof message.gpt.name === 'string' && typeof message.gpt.url === 'string' && ['gpt-editor', 'gpt-detail'].includes(String(message.gpt.exportSource)) && Array.isArray(message.gpt.conversationStarters) && Array.isArray(message.gpt.knowledgeFiles) && Array.isArray(message.gpt.actions) && Array.isArray(message.gpt.warnings) && ['basicInformation','instructions','conversationStarters','knowledgeReferences','knowledgeDownloads','capabilities','integrations','openApiSchemas','profileImageReference','profileImageDownload'].every((key) => typeof options[key] === 'boolean')
+  return message.exportId.length > 5 && typeof message.gpt.name === 'string' && typeof message.gpt.url === 'string' && ['gpt-editor', 'gpt-detail'].includes(String(message.gpt.exportSource)) && Array.isArray(message.gpt.conversationStarters) && Array.isArray(message.gpt.knowledgeFiles) && Array.isArray(message.gpt.actions) && Array.isArray(message.gpt.warnings) && ['basicInformation','instructions','conversationStarters','knowledgeReferences','knowledgeDownloads','capabilities','integrations','openApiSchemas','profileImageReference'].every((key) => typeof options[key] === 'boolean')
 }

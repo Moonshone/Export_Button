@@ -1,5 +1,5 @@
-import { parseChatGptChatUrl, projectIdFromChatGptUrl } from './chatUrl'
-import { PROJECT_SELECTORS, PROJECT_URL_PATTERN } from './projectSelectors'
+import { parseChatGptChatUrl, parseProjectOverviewUrl, projectIdFromChatGptUrl } from './chatUrl'
+import { PROJECT_SELECTORS } from './projectSelectors'
 import { readVisibleProjectTitle } from './pageContext'
 import type { ChatGptProject, ProjectChatReference, ProjectFileReference } from './projectTypes'
 
@@ -45,7 +45,8 @@ function files(area: Element, base: string): ProjectFileReference[] {
   return result
 }
 export function readChatGptProject(documentRef: Document = document): ChatGptProject | undefined {
-  const url = safeChatGptUrl(documentRef.location.href) ?? safeChatGptUrl(`${documentRef.location.pathname}${documentRef.location.search}${documentRef.location.hash}`); if (!url || !PROJECT_URL_PATTERN.test(url.pathname)) return undefined
+  const url = safeChatGptUrl(documentRef.location.href) ?? safeChatGptUrl(`${documentRef.location.pathname}${documentRef.location.search}${documentRef.location.hash}`)
+  if (!url || (!parseProjectOverviewUrl(url.href) && !/^\/project\/[^/]+(?:\/|$)/.test(url.pathname))) return undefined
   const area = Array.from(documentRef.querySelectorAll(PROJECT_SELECTORS.area)).find(visible) || documentRef.querySelector('main'); if (!area) return undefined
   const id = projectId(url, area)
   const explicitContainer = Array.from(documentRef.querySelectorAll(PROJECT_SELECTORS.chatContainer)).find(visible)
