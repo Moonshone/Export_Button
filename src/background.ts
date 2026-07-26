@@ -2,10 +2,12 @@ import { createProjectArchive } from './chatgpt/projectExport'
 import type { ExportedProjectChat, ProjectExportError } from './chatgpt/projectTypes'
 import { safeChatGptUrl } from './chatgpt/projectReader'
 import { parseChatGptChatUrl, projectIdFromChatGptUrl } from './chatgpt/chatUrl'
-import { isCancelProjectExportMessage, isDownloadArchiveMessage, isStartProjectExportMessage, type DownloadArchiveResponse, type ExtractCurrentChatMessage, type ExtractCurrentChatResponse, type ProjectExportProgressMessage, type ProjectExportResult, type StartProjectExportMessage } from './types/extensionMessages'
+import { createGptArchive } from './chatgpt/gptExport'
+import { isCancelGptExportMessage, isCancelProjectExportMessage, isDownloadArchiveMessage, isStartGptExportMessage, isStartProjectExportMessage, type DownloadArchiveResponse, type ExtractCurrentChatMessage, type ExtractCurrentChatResponse, type GptExportProgressMessage, type GptExportResult, type ProjectExportProgressMessage, type ProjectExportResult, type StartGptExportMessage, type StartProjectExportMessage } from './types/extensionMessages'
 
 interface Job { cancelled: boolean; tabs: Set<number> }
 const jobs = new Map<string, Job>()
+const gptJobs = new Map<string, { cancelled: boolean }>()
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 function safeZip(filename: string): boolean { return filename.length > 0 && filename.length <= 200 && filename.endsWith('.zip') && !Array.from(filename).some((character) => character.charCodeAt(0) <= 31) && !/[<>:"/\\|?*]/.test(filename) && !/[. ]$/.test(filename) }
 function base64(value: string): boolean { return value.length > 0 && value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(value) }
@@ -48,7 +50,15 @@ async function run(message: StartProjectExportMessage): Promise<ProjectExportRes
   } catch { progress(message.exportId, chats.length, message.project.chats.length, 'failed'); return { ok: false, errorCode: 'EXPORT_FAILED', message: 'Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.' } }
   finally { await Promise.all([...job.tabs].map((id) => close(job, id))); jobs.delete(message.exportId) }
 }
+async function runGpt(message: StartGptExportMessage): Promise<GptExportResult> {
+  if (jobs.size || gptJobs.size) return { ok: false, errorCode: 'EXPORT_RUNNING', message: 'Ein Export wird bereits ausgeführt.' }
+  const job = { cancelled: false }; gptJobs.set(message.exportId, job)
+  const send = (status: GptExportProgressMessage['status']) => void chrome.runtime.sendMessage<GptExportProgressMessage, unknown>({ type: 'GPT_EXPORT_PROGRESS', exportId: message.exportId, status }).catch(() => undefined)
+  try { send('packaging'); const archive = await createGptArchive(message.gpt, message.options, chrome.runtime.getManifest().version); if (job.cancelled) return { ok: false, errorCode: 'CANCELLED', message: 'Der GPT-Export wurde abgebrochen.' }; send('downloading'); const downloadId = await chrome.downloads.download({ url: `data:application/zip;base64,${archive.base64}`, filename: archive.filename, saveAs: true }); send('completed'); return { ok: true, downloadId, complete: archive.complete, warningCount: archive.warningCount } } catch { send('failed'); return { ok: false, errorCode: 'EXPORT_FAILED', message: 'Der GPT konnte nicht exportiert werden. Bitte versuche es erneut.' } } finally { gptJobs.delete(message.exportId) }
+}
 export function handleExtensionMessage(message: unknown, _sender: chrome.runtime.MessageSender, sendResponse: (response: unknown) => void): boolean | undefined {
+  if (isCancelGptExportMessage(message)) { const job = gptJobs.get(message.exportId); if (job) job.cancelled = true; sendResponse({ ok: true }); return false }
+  if (typeof message === 'object' && message !== null && (message as Record<string, unknown>).type === 'START_GPT_EXPORT') { if (!isStartGptExportMessage(message)) { sendResponse({ ok: false, errorCode: 'INVALID_REQUEST', message: 'Die GPT-Export-Anfrage ist ungültig.' } satisfies GptExportResult); return false } void runGpt(message).then(sendResponse); return true }
   if (isCancelProjectExportMessage(message)) { const job = jobs.get(message.exportId); if (job) { job.cancelled = true; void Promise.all([...job.tabs].map((id) => close(job, id))) } sendResponse({ ok: true }); return false }
   if (typeof message === 'object' && message !== null && (message as Record<string, unknown>).type === 'START_PROJECT_EXPORT') {
     const projectId = isStartProjectExportMessage(message) ? projectIdFromChatGptUrl(message.project.url) : undefined

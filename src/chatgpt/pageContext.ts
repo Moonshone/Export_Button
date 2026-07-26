@@ -1,9 +1,13 @@
 import { parseChatGptChatUrl, parseProjectOverviewUrl } from './chatUrl'
 import { PROJECT_SELECTORS } from './projectSelectors'
+import { parseChatGptGptUrl } from './gptUrl'
+import { GPT_SELECTORS } from './gptSelectors'
 
 export type ChatGptPageContext =
   | { type: 'chat'; chatUrl: string }
   | { type: 'project-overview'; projectId?: string; projectTitle: string; projectUrl: string }
+  | { type: 'gpt-detail'; gptId?: string; gptName: string; gptUrl: string; accessLevel: 'public' | 'shared' | 'owned' | 'unknown' }
+  | { type: 'gpt-editor'; gptId?: string; gptName: string; gptUrl: string }
   | { type: 'unsupported' }
 
 const FALLBACK_PROJECT_TITLE = 'ChatGPT-Projekt'
@@ -63,7 +67,16 @@ export function detectChatGptPageContext(documentRef: Document = document): Chat
   if (!url) return { type: 'unsupported' }
 
   const chat = parseChatGptChatUrl(url.href)
-  if (chat) return { type: 'chat', chatUrl: chat.url }
+  const visibleMessages = Array.from(documentRef.querySelectorAll(GPT_SELECTORS.chatMessage)).some(isVisible)
+  if (chat || (visibleMessages && /\/c\//.test(url.pathname))) return { type: 'chat', chatUrl: chat?.url ?? url.href }
+
+  const gpt = parseChatGptGptUrl(url.href)
+  if (gpt && gpt.type !== 'list') {
+    const main = Array.from(documentRef.querySelectorAll('main')).find(isVisible)
+    const name = normalized(main?.querySelector(GPT_SELECTORS.name)?.textContent)
+    const signal = main && (name || main.querySelector(`${GPT_SELECTORS.description}, ${GPT_SELECTORS.instructions}, ${GPT_SELECTORS.starter}`))
+    if (signal) return gpt.type === 'editor' ? { type: 'gpt-editor', gptId: gpt.id, gptName: name ?? 'ChatGPT-GPT', gptUrl: gpt.url } : { type: 'gpt-detail', gptId: gpt.id, gptName: name ?? 'ChatGPT-GPT', gptUrl: gpt.url, accessLevel: 'unknown' }
+  }
 
   const project = parseProjectOverviewUrl(url.href)
   if (!project) return { type: 'unsupported' }

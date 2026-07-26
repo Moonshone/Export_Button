@@ -1,0 +1,9 @@
+export type GptExportSource = 'gpt-editor' | 'gpt-detail'
+export type GptVisibility = 'private' | 'workspace' | 'shared-link' | 'public' | 'unknown'
+export type GptExportWarning = { section: 'general' | 'instructions' | 'knowledge' | 'capabilities' | 'app' | 'action' | 'profile-image'; message: string }
+export type GptKnowledgeFile = { id?: string; name: string; type?: string; sizeLabel?: string; visibleUrl?: string; downloadable: boolean; includedInArchive: boolean; error?: string }
+export type GptCapabilities = { webSearch?: boolean | null; imageGeneration?: boolean | null; codeInterpreter?: boolean | null; canvas?: boolean | null; dataAnalysis?: boolean | null; otherVisibleCapabilities: string[] }
+export type GptAppReference = { name?: string; description?: string; visibleMetadata: Record<string, string> }
+export type GptActionReference = { name?: string; description?: string; domain?: string; authenticationType?: string; openApiSchemaVisible: boolean; openApiSchema?: unknown; sensitiveValuesExcluded: true }
+export type CustomGptExportData = { exportSource: GptExportSource; id?: string; name: string; description?: string; url: string; visibility?: { value: GptVisibility; label?: string }; creator?: { name?: string; organization?: string }; instructions?: string; conversationStarters: string[]; knowledgeFiles: GptKnowledgeFile[]; capabilities: GptCapabilities; app?: GptAppReference; actions: GptActionReference[]; recommendedModel?: string; profileImage?: { visibleUrl?: string; alt?: string; includedInArchive: boolean }; warnings: GptExportWarning[]; capturedAt: string }
+export type GptExportOptions = { basicInformation: boolean; instructions: boolean; conversationStarters: boolean; knowledgeReferences: boolean; knowledgeDownloads: boolean; capabilities: boolean; integrations: boolean; openApiSchemas: boolean; profileImageReference: boolean; profileImageDownload: boolean }
