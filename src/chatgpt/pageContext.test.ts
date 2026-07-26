@@ -34,6 +34,18 @@ describe('ChatGPT-Seitenkontext', () => {
     expect(detectChatGptPageContext()).toEqual({ type: 'unsupported' })
   })
 
+  it.each(['/gpts', '/gpts/', '/gpts/mine', '/gpts/discover', '/gpts/editor'])('behandelt die GPT-Listenroute %s als nicht exportierbar', (path) => {
+    window.history.replaceState({}, '', path)
+    document.body.innerHTML = '<main><header><h1>GPTs erkunden</h1><button>Meine GPTs</button><button>Erstellen</button></header><section><h2>GPTS</h2><p>Entdecke und erstelle individuelle ChatGPT-Versionen.</p><input placeholder="In GPTs suchen"><div><article><h3>Schulaufgabengenerator-Quizz Mathematik</h3></article><article><h3>Storyboard Produzent</h3></article></div></section></main>'
+    expect(detectChatGptPageContext()).toEqual({ type: 'unsupported' })
+  })
+
+  it('erkennt einen konkreten GPT-Editor', () => {
+    window.history.replaceState({}, '', '/gpts/editor/g-abc')
+    document.body.innerHTML = '<main><h1>Mein GPT</h1></main>'
+    expect(detectChatGptPageContext()).toMatchObject({ type: 'gpt-editor', gptId: 'g-abc' })
+  })
+
   it('erkennt die reale GPT-Detailroute ohne technische Testattribute', () => {
     window.history.replaceState({}, '', '/g/g-69de136277f4819189aa21247ccb1538-english-lerncoach')
     document.body.innerHTML = '<div role="main"><header><button>English Lerncoach</button></header><section><div aria-hidden="true"></div><h1>English Lerncoach</h1><p>Von Ma Kad</p><p>Ich helfe deutschsprachigen Lernenden, Englisch strukturiert zu verbessern.</p><div data-starter-area><button>Starte meinen Englisch-Einstufungstest.</button><button>Ich habe schon ein Profil. Mach mit der nächsten Lektion...</button></div><div contenteditable="true" data-placeholder="ChatGPT fragen"></div></section></div>'
