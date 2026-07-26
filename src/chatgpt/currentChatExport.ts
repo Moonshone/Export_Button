@@ -1,6 +1,7 @@
 import JSZip from 'jszip'
 import type { VisibleConversation } from './conversationReader'
 import { sanitizeTitle } from './conversationReader'
+import { formatLocalMinuteStamp } from '../services/exportFormatting'
 
 const ROLE_LABELS = { user: 'Benutzer', assistant: 'Assistent', system: 'System', unknown: 'Unbekannt' } as const
 
@@ -22,8 +23,7 @@ export function createConversationMarkdown(conversation: VisibleConversation, ex
 }
 
 export function createCurrentChatFilename(title: string, date: Date): string {
-  const stamp = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}-${String(date.getHours()).padStart(2, '0')}-${String(date.getMinutes()).padStart(2, '0')}`
-  return `chatgpt-${sanitizeTitle(title)}-${stamp}.zip`
+  return `chatgpt-${sanitizeTitle(title)}-${formatLocalMinuteStamp(date)}.zip`
 }
 
 export async function createCurrentChatArchive(conversation: VisibleConversation, exportedAt = new Date()) {

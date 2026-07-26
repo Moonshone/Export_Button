@@ -1,5 +1,6 @@
 import JSZip from 'jszip'
 import type { Conversation } from '../types/chat'
+import { formatLocalMinuteStamp } from './exportFormatting'
 
 const APPLICATION_NAME = 'Lokaler Chat-Export'
 const EXPORT_VERSION = '1.0'
@@ -23,10 +24,6 @@ export class ChatExportError extends Error {
   }
 }
 
-function pad(value: number): string {
-  return value.toString().padStart(2, '0')
-}
-
 export function sanitizeFilename(filename: string): string {
   const withoutControlCharacters = Array.from(filename, (character) =>
     character.charCodeAt(0) <= 31 ? '-' : character,
@@ -39,15 +36,7 @@ export function sanitizeFilename(filename: string): string {
 }
 
 export function createExportFilename(date = new Date()): string {
-  const year = date.getFullYear()
-  const month = pad(date.getMonth() + 1)
-  const day = pad(date.getDate())
-  const hours = pad(date.getHours())
-  const minutes = pad(date.getMinutes())
-
-  return sanitizeFilename(
-    `chat-export-${year}-${month}-${day}-${hours}-${minutes}.zip`,
-  )
+  return sanitizeFilename(`chat-export-${formatLocalMinuteStamp(date)}.zip`)
 }
 
 export async function createChatExport(
