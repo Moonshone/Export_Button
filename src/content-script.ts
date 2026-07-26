@@ -64,10 +64,10 @@ export function ensureExportButton(documentRef: Document = document): HTMLElemen
   host.id = CONTENT_ROOT_ID
   const shadow = host.attachShadow({ mode: 'open' })
   shadow.innerHTML = `<style>
-    :host { all: initial; position: fixed; right: 20px; bottom: 88px; z-index: 10000; }
-    button { all: initial; box-sizing: border-box; display: block; max-width: min(280px, calc(100vw - 24px)); padding: 12px 16px; border: 1px solid #0b6b4f; border-radius: 999px; background: #087a58; color: white; box-shadow: 0 4px 16px rgb(0 0 0 / 25%); cursor: pointer; font: 600 14px/1.3 system-ui, sans-serif; text-align: center; }
+    :host { all: initial; position: fixed; right: 14px; bottom: 80px; z-index: 10000; }
+    button { all: initial; box-sizing: border-box; display: block; max-width: min(175px, calc(100vw - 24px)); padding: 7px 10px; border: 1px solid #0b6b4f; border-radius: 999px; background: #087a58; color: white; box-shadow: 0 2px 9px rgb(0 0 0 / 20%); cursor: pointer; font: 600 11px/1.25 system-ui, sans-serif; text-align: center; }
     button:hover { background: #066548; } button:focus-visible { outline: 3px solid #f5a623; outline-offset: 3px; } button:disabled { cursor: wait; opacity: .8; }
-    @media (max-width: 480px) { :host { right: 12px; bottom: 76px; } button { padding: 10px 13px; font-size: 13px; } }
+    @media (max-width: 480px) { :host { right: 10px; bottom: 68px; } button { padding: 7px 9px; font-size: 11px; } }
     @media (prefers-color-scheme: dark) { button { border-color: #61d6b1; background: #126b55; } button:hover { background: #178269; } }
   </style>`
   const button = documentRef.createElement('button')
