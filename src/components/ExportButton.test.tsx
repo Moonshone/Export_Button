@@ -60,6 +60,21 @@ describe('ExportButton', () => {
     await waitFor(() => expect(trigger).toHaveFocus())
   })
 
+  it('hält den Tastaturfokus im geöffneten Dialog', async () => {
+    const user = userEvent.setup()
+    render(<ExportButton conversations={sampleConversations} />)
+
+    await user.click(screen.getByRole('button', { name: 'Daten exportieren' }))
+    const cancelButton = screen.getByRole('button', { name: 'Abbrechen' })
+    const createButton = screen.getByRole('button', { name: 'ZIP-Datei erstellen' })
+
+    expect(cancelButton).toHaveFocus()
+    await user.keyboard('{Shift>}{Tab}{/Shift}')
+    expect(createButton).toHaveFocus()
+    await user.tab()
+    expect(cancelButton).toHaveFocus()
+  })
+
   it('schließt den Dialog bei einem Klick außerhalb', async () => {
     const user = userEvent.setup()
     render(<ExportButton conversations={sampleConversations} />)
@@ -102,7 +117,6 @@ describe('ExportButton', () => {
     vi.mocked(exportService.createChatExport).mockRejectedValue(
       new Error('Interner Stacktrace: geheimer Dateipfad'),
     )
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const user = userEvent.setup()
     render(<ExportButton conversations={sampleConversations} />)
 

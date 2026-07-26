@@ -62,13 +62,13 @@ export async function createChatExport(
     }
 
     const manifestPayload = {
-    exportVersion: EXPORT_VERSION,
-    exportedAt: exportedAtIso,
-    applicationName: APPLICATION_NAME,
-    conversationCount: conversations.length,
-    messageCount,
-    storageType: 'browser-localStorage',
-    includedFiles: ['conversations.json', 'manifest.json', 'README.txt'],
+      exportVersion: EXPORT_VERSION,
+      exportedAt: exportedAtIso,
+      applicationName: APPLICATION_NAME,
+      conversationCount: conversations.length,
+      messageCount,
+      storageType: 'browser-localStorage',
+      includedFiles: ['conversations.json', 'manifest.json', 'README.txt'],
     }
 
     zip.file('conversations.json', JSON.stringify(conversationPayload, null, 2))

@@ -1,4 +1,5 @@
-import { KeyboardEvent, useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import type { Conversation } from '../types/chat'
 import { createChatExport, downloadBlob } from '../services/exportService'
 
@@ -17,6 +18,7 @@ export function ExportButton({ conversations }: ExportButtonProps) {
   const exportInProgress = useRef(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
+  const createRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   const descriptionId = useId()
   const messageCount = conversations.reduce(
@@ -45,6 +47,21 @@ export function ExportButton({ conversations }: ExportButtonProps) {
     if (event.key === 'Escape') {
       event.preventDefault()
       closeDialog()
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    const firstElement = cancelRef.current
+    const lastElement = createRef.current
+    if (!firstElement || !lastElement) return
+
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault()
+      lastElement.focus()
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault()
+      firstElement.focus()
     }
   }
 
@@ -60,8 +77,7 @@ export function ExportButton({ conversations }: ExportButtonProps) {
       const archive = await createChatExport(conversations)
       downloadBlob(archive.blob, archive.filename)
       setStatus('success')
-    } catch (error) {
-      console.error('Der Export ist fehlgeschlagen.', error)
+    } catch {
       setStatus('error')
     } finally {
       exportInProgress.current = false
@@ -127,6 +143,7 @@ export function ExportButton({ conversations }: ExportButtonProps) {
                 Abbrechen
               </button>
               <button
+                ref={createRef}
                 className="primary"
                 type="button"
                 onClick={handleExport}
