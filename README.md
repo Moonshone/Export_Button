@@ -1,9 +1,9 @@
 # Lokaler Chat-Export – Browser-Erweiterung
 
 Installierbare Manifest-V3-Erweiterung für Google Chrome und Microsoft Edge.
-Das React-/TypeScript-Popup liest eigene Chatdaten aus `chrome.storage.local`
-und exportiert sie mit JSZip vollständig lokal. Es gibt kein Backend, keine
-Netzwerkanfragen, keine Cloud-Speicherung und keinen Zugriff auf ChatGPT.
+Das React-/TypeScript-Content-Script ergänzt auf `https://chatgpt.com/` einen
+Button, der ausschließlich die aktuell geöffnete, im DOM sichtbare Unterhaltung
+mit JSZip exportiert. Das vorhandene Popup bleibt verfügbar.
 
 ## Entwicklung
 
@@ -34,7 +34,20 @@ keine externen Skripte oder CDN-Ressourcen.
 4. **Entpackte Erweiterung laden** wählen.
 5. Den Ordner `dist/` auswählen und die Erweiterung bei Bedarf anheften.
 
-## Datenspeicherung und Export
+## Datenschutz und aktueller Chat-Export
+
+Der Export wird ausschließlich im Browser erzeugt. Die Erweiterung sendet keine
+Nachrichten an Server, verwendet weder Analyse noch Tracking und liest keine
+Cookies, Authentifizierungstokens, `localStorage`- oder `sessionStorage`-Daten
+von ChatGPT. Sie ruft keine internen OpenAI-APIs auf, durchsucht nicht die
+Chat-Historie und speichert keine ChatGPT-Zugangsdaten. Das Content Script darf
+nur Inhalte auf `https://chatgpt.com/*` lesen; `<all_urls>` wird nicht verwendet.
+
+Das ZIP des Seitenbuttons enthält `conversation.json`, `conversation.md` und
+`README.txt`. Bilder, Anhänge sowie nicht sichtbare Inhalte können fehlen. Die
+Erweiterung ist kein offizielles OpenAI-Produkt.
+
+## Bestehender Popup-Export
 
 Unterhaltungen liegen unter dem Schlüssel `conversations` in
 `chrome.storage.local`. Der abstrahierte Storage-Service lädt, speichert und
@@ -49,8 +62,10 @@ Der Download wird über `chrome.downloads.download()` gestartet und heißt
 
 ## Bekannte Einschränkungen
 
-- Die Erweiterung erfasst keine Chats von Webseiten und enthält bewusst kein
-  Content Script sowie keine Host-Berechtigungen.
+- ChatGPT kann sein DOM jederzeit ändern; alle ChatGPT-Selektoren sind deshalb
+  zentral gekapselt, müssen bei Änderungen der Seite aber eventuell angepasst werden.
+- Exportiert wird sichtbarer Text. Bilder, Anhänge und manche Formatierungen
+  sind möglicherweise nicht enthalten.
 - Daten werden nicht zwischen Browsern, Profilen oder Geräten übertragen.
 - Es gibt derzeit keinen Import und keine eigene Oberfläche zum Anlegen von
   Chats; das Popup exportiert Daten, die andere lokale Erweiterungsfunktionen

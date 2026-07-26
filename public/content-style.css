@@ -1,0 +1,4 @@
+#chat-export-extension-root {
+  /* Die eigentliche Oberfläche ist vollständig im Shadow DOM gekapselt. */
+  color-scheme: light dark;
+}

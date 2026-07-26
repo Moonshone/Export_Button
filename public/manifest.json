@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Lokaler Chat-Export",
-  "version": "1.0.0",
-  "description": "Exportiert lokal gespeicherte Chatdaten als ZIP-Datei.",
+  "name": "Lokaler ChatGPT-Export",
+  "version": "0.2.0",
+  "description": "Exportiert die aktuell geöffnete ChatGPT-Unterhaltung lokal.",
   "permissions": [
     "storage",
     "downloads"
@@ -10,5 +10,13 @@
   "action": {
     "default_title": "Lokaler Chat-Export öffnen",
     "default_popup": "popup.html"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content-script.js"],
+      "css": ["content-style.css"],
+      "run_at": "document_idle"
+    }
+  ]
 }

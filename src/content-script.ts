@@ -1,0 +1,78 @@
+import { readVisibleConversation } from './chatgpt/conversationReader'
+import { createCurrentChatArchive } from './chatgpt/currentChatExport'
+
+export const CONTENT_ROOT_ID = 'chat-export-extension-root'
+export const CONTENT_BUTTON_ID = 'chat-export-extension-button'
+const EMPTY_MESSAGE = 'In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.'
+
+let exporting = false
+let observer: MutationObserver | undefined
+let scheduled = false
+
+function setButtonState(button: HTMLButtonElement, text: string, disabled: boolean) {
+  button.textContent = text
+  button.disabled = disabled
+}
+
+export async function exportCurrentConversation(button: HTMLButtonElement): Promise<void> {
+  if (exporting) return
+  exporting = true
+  setButtonState(button, 'Export wird erstellt …', true)
+  try {
+    const conversation = readVisibleConversation()
+    if (conversation.messages.length === 0) {
+      setButtonState(button, EMPTY_MESSAGE, false)
+      return
+    }
+    const archive = await createCurrentChatArchive(conversation)
+    const url = URL.createObjectURL(archive.blob)
+    try {
+      await chrome.downloads.download({ url, filename: archive.filename, saveAs: true })
+      setButtonState(button, 'Download wurde gestartet.', false)
+    } finally {
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+  } catch {
+    setButtonState(button, 'Der Export konnte nicht erstellt werden. Bitte versuche es erneut.', false)
+  } finally {
+    exporting = false
+  }
+}
+
+export function ensureExportButton(documentRef: Document = document): HTMLElement {
+  const existing = documentRef.getElementById(CONTENT_ROOT_ID)
+  if (existing) return existing
+  const host = documentRef.createElement('div')
+  host.id = CONTENT_ROOT_ID
+  const shadow = host.attachShadow({ mode: 'open' })
+  shadow.innerHTML = `<style>
+    :host { all: initial; position: fixed; right: 20px; bottom: 88px; z-index: 10000; }
+    button { all: initial; box-sizing: border-box; display: block; max-width: min(280px, calc(100vw - 24px)); padding: 12px 16px; border: 1px solid #0b6b4f; border-radius: 999px; background: #087a58; color: white; box-shadow: 0 4px 16px rgb(0 0 0 / 25%); cursor: pointer; font: 600 14px/1.3 system-ui, sans-serif; text-align: center; }
+    button:hover { background: #066548; } button:focus-visible { outline: 3px solid #f5a623; outline-offset: 3px; } button:disabled { cursor: wait; opacity: .8; }
+    @media (max-width: 480px) { :host { right: 12px; bottom: 76px; } button { padding: 10px 13px; font-size: 13px; } }
+    @media (prefers-color-scheme: dark) { button { border-color: #61d6b1; background: #126b55; } button:hover { background: #178269; } }
+  </style>`
+  const button = documentRef.createElement('button')
+  button.id = CONTENT_BUTTON_ID
+  button.type = 'button'
+  button.textContent = 'Aktuellen Chat exportieren'
+  button.setAttribute('aria-label', 'Aktuell geöffnete ChatGPT-Unterhaltung exportieren')
+  button.addEventListener('click', () => void exportCurrentConversation(button))
+  shadow.append(button)
+  documentRef.body.append(host)
+  return host
+}
+
+export function startContentScript(documentRef: Document = document): MutationObserver {
+  ensureExportButton(documentRef)
+  if (observer) return observer
+  observer = new MutationObserver(() => {
+    if (scheduled) return
+    scheduled = true
+    queueMicrotask(() => { scheduled = false; ensureExportButton(documentRef) })
+  })
+  observer.observe(documentRef.body, { childList: true, subtree: true })
+  return observer
+}
+
+if (typeof document !== 'undefined' && document.body) startContentScript()
