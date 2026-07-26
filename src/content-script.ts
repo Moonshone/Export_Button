@@ -1,5 +1,6 @@
 import { readVisibleConversation } from './chatgpt/conversationReader'
 import { createCurrentChatArchive } from './chatgpt/currentChatExport'
+import { downloadArchive } from './services/exportService'
 
 export const CONTENT_ROOT_ID = 'chat-export-extension-root'
 export const CONTENT_BUTTON_ID = 'chat-export-extension-button'
@@ -25,13 +26,8 @@ export async function exportCurrentConversation(button: HTMLButtonElement): Prom
       return
     }
     const archive = await createCurrentChatArchive(conversation)
-    const url = URL.createObjectURL(archive.blob)
-    try {
-      await chrome.downloads.download({ url, filename: archive.filename, saveAs: true })
-      setButtonState(button, 'Download wurde gestartet.', false)
-    } finally {
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-    }
+    await downloadArchive(archive)
+    setButtonState(button, 'Download wurde gestartet.', false)
   } catch {
     setButtonState(button, 'Der Export konnte nicht erstellt werden. Bitte versuche es erneut.', false)
   } finally {
