@@ -17,6 +17,11 @@ button { min-height: 42px; padding: 9px 14px; border: 1px solid #b9c2be; border-
 .chat-list span, .chat-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-list small { margin-top: 3px; color: #aebfb8; }
 .local-note { margin: auto 0 0; padding: 14px; border: 1px solid #507064; border-radius: 10px; color: #c4d2cc; font-size: .83rem; line-height: 1.5; }
+.export-control { display: grid; gap: 6px; }
+.export-button { width: 100%; border-color: #89a399; color: #eef6f2; font-weight: 700; }
+.export-button span { margin-right: 7px; }
+.status { min-height: 2.5em; margin: 0; color: #c4d2cc; font-size: .78rem; line-height: 1.35; }
+.status-error { color: #ffb8b8; }
 .chat-panel { min-width: 0; display: flex; flex-direction: column; height: 100vh; }
 .chat-header { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 22px 32px; border-bottom: 1px solid #d7dcd9; background: #fff; }
 .eyebrow { margin: 0 0 4px; color: #63706b; font-size: .7rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }

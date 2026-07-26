@@ -10,6 +10,7 @@ type ExportStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export function ExportButton({ conversations }: ExportButtonProps) {
   const [status, setStatus] = useState<ExportStatus>('idle')
+  const [errorMessage, setErrorMessage] = useState('')
 
   async function handleExport(): Promise<void> {
     if (status === 'loading') {
@@ -17,6 +18,7 @@ export function ExportButton({ conversations }: ExportButtonProps) {
     }
 
     setStatus('loading')
+    setErrorMessage('')
 
     try {
       const archive = await createChatExport(conversations)
@@ -24,6 +26,11 @@ export function ExportButton({ conversations }: ExportButtonProps) {
       setStatus('success')
     } catch (error) {
       console.error('Der Export ist fehlgeschlagen.', error)
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : 'Ein unbekannter Fehler ist aufgetreten. Bitte versuche es erneut.',
+      )
       setStatus('error')
     }
   }
@@ -32,7 +39,7 @@ export function ExportButton({ conversations }: ExportButtonProps) {
     idle: 'Die Datei wird nur lokal auf deinem Computer gespeichert.',
     loading: 'Export wird erstellt ...',
     success: 'Der Download wurde gestartet.',
-    error: 'Der Export konnte nicht erstellt werden.',
+    error: errorMessage,
   }[status]
 
   return (

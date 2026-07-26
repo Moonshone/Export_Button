@@ -7,6 +7,7 @@ import {
   updateConversation,
 } from './services/storageService'
 import './styles.css'
+import { ExportButton } from './components/ExportButton'
 
 function newId() {
   return crypto.randomUUID()
@@ -75,6 +76,7 @@ function App() {
           </ul>
         </nav>
         <p className="local-note">🔒 Alle Daten werden ausschließlich lokal in diesem Browser gespeichert.</p>
+        <ExportButton conversations={chats} />
       </aside>
 
       <section className="chat-panel" aria-live="polite">
