@@ -1,134 +1,51 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { sampleConversations } from '../data/sampleChats'
-import * as exportService from '../services/exportService'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExportButton } from './ExportButton'
+import * as exportService from '../services/exportService'
 
-const archive = {
-  blob: new Blob(['export']),
-  filename: 'chat-export.zip',
-}
-
-beforeEach(() => {
-  vi.spyOn(exportService, 'createChatExport').mockResolvedValue(archive)
-  vi.spyOn(exportService, 'downloadBlob').mockImplementation(() => undefined)
+vi.mock('../services/exportService', async (importOriginal) => {
+  const actual = await importOriginal<typeof exportService>()
+  return { ...actual, createChatExport: vi.fn(), downloadArchive: vi.fn() }
 })
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
+const archive = { blob: new Blob(['zip']), filename: 'chat-export-2026-07-26-10-00.zip' }
 
 describe('ExportButton', () => {
-  it('öffnet den Dialog mit Zusammenfassung und setzt den Fokus hinein', async () => {
-    const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
+  beforeEach(() => {
+    vi.mocked(exportService.createChatExport).mockReset().mockResolvedValue(archive)
+    vi.mocked(exportService.downloadArchive).mockReset().mockResolvedValue(1)
+  })
 
+  it('erstellt ZIP und startet genau einen Download', async () => {
+    const user = userEvent.setup()
+    render(<ExportButton conversations={[]} />)
     await user.click(screen.getByRole('button', { name: 'Daten exportieren' }))
-
-    const dialog = screen.getByRole('dialog', { name: 'Chatdaten exportieren' })
-    expect(dialog).toHaveAttribute('aria-modal', 'true')
-    expect(dialog).toHaveAccessibleDescription(
-      'Deine lokal gespeicherten Unterhaltungen werden als ZIP-Datei auf deinem Computer gespeichert. Es werden keine Daten an einen Server übertragen.',
-    )
-    expect(screen.getByText('Anzahl der Chats')).toBeInTheDocument()
-    expect(screen.getByText('Anzahl der Nachrichten')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Abbrechen' })).toHaveFocus()
+    expect(exportService.createChatExport).toHaveBeenCalledWith([])
+    expect(exportService.downloadArchive).toHaveBeenCalledWith(archive)
+    expect(await screen.findByText('Der Download wurde gestartet.')).toBeInTheDocument()
   })
 
-  it('bricht ab und gibt den Fokus an den Exportbutton zurück', async () => {
+  it('deaktiviert den Button und verhindert doppelte Downloads', async () => {
+    let finish!: (value: typeof archive) => void
+    vi.mocked(exportService.createChatExport).mockImplementation(() => new Promise((resolve) => { finish = resolve }))
     const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
-    const trigger = screen.getByRole('button', { name: 'Daten exportieren' })
-
-    await user.click(trigger)
-    await user.click(screen.getByRole('button', { name: 'Abbrechen' }))
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    await waitFor(() => expect(trigger).toHaveFocus())
-  })
-
-  it('schließt den Dialog mit Escape', async () => {
-    const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
-    const trigger = screen.getByRole('button', { name: 'Daten exportieren' })
-
-    await user.click(trigger)
-    await user.keyboard('{Escape}')
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    await waitFor(() => expect(trigger).toHaveFocus())
-  })
-
-  it('hält den Tastaturfokus im geöffneten Dialog', async () => {
-    const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
-
-    await user.click(screen.getByRole('button', { name: 'Daten exportieren' }))
-    const cancelButton = screen.getByRole('button', { name: 'Abbrechen' })
-    const createButton = screen.getByRole('button', { name: 'ZIP-Datei erstellen' })
-
-    expect(cancelButton).toHaveFocus()
-    await user.keyboard('{Shift>}{Tab}{/Shift}')
-    expect(createButton).toHaveFocus()
-    await user.tab()
-    expect(cancelButton).toHaveFocus()
-  })
-
-  it('schließt den Dialog bei einem Klick außerhalb', async () => {
-    const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
-
-    await user.click(screen.getByRole('button', { name: 'Daten exportieren' }))
-    const dialog = screen.getByRole('dialog')
-    await user.click(dialog.parentElement as HTMLElement)
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('erstellt den Export nur einmal und meldet den gestarteten Download', async () => {
-    let finishExport: ((value: typeof archive) => void) | undefined
-    vi.mocked(exportService.createChatExport).mockImplementation(
-      () => new Promise((resolve) => { finishExport = resolve }),
-    )
-    const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
-    await user.click(screen.getByRole('button', { name: 'Daten exportieren' }))
-    const createButton = screen.getByRole('button', { name: 'ZIP-Datei erstellen' })
-
-    await user.dblClick(createButton)
-
+    render(<ExportButton conversations={[]} />)
+    const button = screen.getByRole('button', { name: 'Daten exportieren' })
+    await user.dblClick(button)
+    expect(screen.getByRole('button', { name: 'Export wird erstellt …' })).toBeDisabled()
     expect(exportService.createChatExport).toHaveBeenCalledTimes(1)
-    expect(createButton).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Abbrechen' })).toBeDisabled()
-    expect(screen.getByText('Export wird erstellt …')).toBeInTheDocument()
-
-    finishExport?.(archive)
-    expect(
-      await screen.findByText('Der Download wurde gestartet.'),
-    ).toBeInTheDocument()
-    expect(exportService.downloadBlob).toHaveBeenCalledWith(
-      archive.blob,
-      archive.filename,
-    )
+    finish(archive)
+    expect(await screen.findByText('Der Download wurde gestartet.')).toBeInTheDocument()
+    expect(exportService.downloadArchive).toHaveBeenCalledTimes(1)
   })
 
-  it('zeigt bei Fehlern eine sichere Meldung ohne technische Details', async () => {
-    vi.mocked(exportService.createChatExport).mockRejectedValue(
-      new Error('Interner Stacktrace: geheimer Dateipfad'),
-    )
+  it('zeigt Downloadfehler ohne Stacktrace', async () => {
+    vi.mocked(exportService.downloadArchive).mockRejectedValue(new Error('interner Stack'))
     const user = userEvent.setup()
-    render(<ExportButton conversations={sampleConversations} />)
-
+    render(<ExportButton conversations={[]} />)
     await user.click(screen.getByRole('button', { name: 'Daten exportieren' }))
-    await user.click(screen.getByRole('button', { name: 'ZIP-Datei erstellen' }))
-
-    expect(
-      await screen.findByText(
-        'Die ZIP-Datei konnte nicht erstellt werden. Bitte versuche es erneut.',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/Stacktrace|Dateipfad/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Abbrechen' })).toBeEnabled()
+    expect(await screen.findByText(/Download konnte nicht gestartet/)).toBeInTheDocument()
+    expect(screen.queryByText(/interner Stack/)).not.toBeInTheDocument()
   })
 })

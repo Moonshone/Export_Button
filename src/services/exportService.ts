@@ -9,6 +9,13 @@ export interface ExportArchive {
   filename: string
 }
 
+export class DownloadError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'DownloadError'
+  }
+}
+
 export class ChatExportError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
@@ -67,7 +74,7 @@ export async function createChatExport(
       applicationName: APPLICATION_NAME,
       conversationCount: conversations.length,
       messageCount,
-      storageType: 'browser-localStorage',
+      storageType: 'chrome.storage.local',
       includedFiles: ['conversations.json', 'manifest.json', 'README.txt'],
     }
 
@@ -102,17 +109,21 @@ export async function createChatExport(
   }
 }
 
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
+export async function downloadArchive(archive: ExportArchive): Promise<number> {
+  if (typeof chrome === 'undefined' || !chrome.downloads?.download) {
+    throw new DownloadError('Die Download-Funktion der Erweiterung ist nicht verfügbar.')
+  }
 
-  link.href = url
-  link.download = filename
-  link.style.display = 'none'
-
-  document.body.append(link)
-  link.click()
-  link.remove()
-
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+  const url = URL.createObjectURL(archive.blob)
+  try {
+    return await chrome.downloads.download({
+      url,
+      filename: archive.filename,
+      saveAs: true,
+    })
+  } catch (error) {
+    throw new DownloadError('Der Download konnte nicht gestartet werden.', { cause: error })
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
 }

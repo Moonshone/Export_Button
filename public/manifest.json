@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Lokaler Chat-Export",
+  "version": "1.0.0",
+  "description": "Exportiert lokal gespeicherte Chatdaten als ZIP-Datei.",
+  "permissions": [
+    "storage",
+    "downloads"
+  ],
+  "action": {
+    "default_title": "Lokaler Chat-Export öffnen",
+    "default_popup": "popup.html"
+  }
+}
