@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseChatGptChatUrl } from './chatUrl'
+import { parseChatGptChatUrl, parseProjectOverviewUrl } from './chatUrl'
 
 const projectId = 'g-p-69f849e273fc8191ba4b3e1fb3602502'
 const chatId = '6a062758-2cac-8328-bf3b-fe896afe1a54'
@@ -11,4 +11,19 @@ describe('parseChatGptChatUrl', () => {
     expect(parseChatGptChatUrl(`/g/${projectId}/c/${chatId}?model=x#antwort`)).toMatchObject({ projectId, chatId, type: 'project-chat' })
   })
   it.each(['https://evil.example/g/g-p-AAA/c/CHAT', 'http://chatgpt.com/c/CHAT', 'https://chatgpt.com.evil.example/c/CHAT', 'not a valid url'])('lehnt ungültige oder fremde URLs ab: %s', (url) => expect(parseChatGptChatUrl(url)).toBeUndefined())
+})
+
+describe('parseProjectOverviewUrl', () => {
+  it.each([
+    ['/g/g-p-AAA', 'project-root'],
+    ['/g/g-p-AAA/', 'project-root'],
+    ['/g/g-p-AAA/project', 'project-overview'],
+    ['/g/g-p-AAA/project/?model=test#chats', 'project-overview'],
+  ] as const)('erkennt %s', (path, routeType) => {
+    expect(parseProjectOverviewUrl(path)).toMatchObject({ projectId: 'g-p-AAA', routeType })
+  })
+
+  it.each(['/g/g-p-AAA/c/CHAT', '/g/g-p-AAA/other', 'https://evil.example/g/g-p-AAA/project', 'http://chatgpt.com/g/g-p-AAA/project', 'https://chatgpt.com:444/g/g-p-AAA/project'])('lehnt Nicht-Projektübersichten ab: %s', (url) => {
+    expect(parseProjectOverviewUrl(url)).toBeUndefined()
+  })
 })

@@ -1,5 +1,6 @@
 import { parseChatGptChatUrl, projectIdFromChatGptUrl } from './chatUrl'
 import { PROJECT_SELECTORS, PROJECT_URL_PATTERN } from './projectSelectors'
+import { readVisibleProjectTitle } from './pageContext'
 import type { ChatGptProject, ProjectChatReference, ProjectFileReference } from './projectTypes'
 
 export const MAX_PROJECT_CHATS = 500
@@ -50,9 +51,8 @@ export function readChatGptProject(documentRef: Document = document): ChatGptPro
   const explicitContainer = Array.from(documentRef.querySelectorAll(PROJECT_SELECTORS.chatContainer)).find(visible)
   const container = explicitContainer || documentRef.querySelector('main') || area
   const chats = chatReferences(container, url.href, id)
-  const titleElement = Array.from(area.querySelectorAll(PROJECT_SELECTORS.title)).find((node) => visible(node) && node.textContent?.trim())
   const instructionsElement = Array.from(area.querySelectorAll(PROJECT_SELECTORS.instructions)).find((node) => visible(node) && node.textContent?.trim())
-  return { id, title: titleElement?.textContent?.trim() || 'ChatGPT-Projekt', url: url.href, instructions: instructionsElement?.textContent?.trim() || undefined, chats, files: files(area, url.href) }
+  return { id, title: readVisibleProjectTitle(documentRef, url), url: url.href, instructions: instructionsElement?.textContent?.trim() || undefined, chats, files: files(area, url.href) }
 }
 export async function discoverProject(documentRef: Document = document, wait: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))): Promise<ChatGptProject | undefined> {
   let project = readChatGptProject(documentRef); if (!project) return undefined
