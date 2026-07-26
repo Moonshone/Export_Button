@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:run": "vitest run",
+    "test:coverage": "NODE_V8_COVERAGE=coverage vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
