@@ -1,54 +1,220 @@
 import { readVisibleConversation } from './chatgpt/conversationReader'
 import { createCurrentChatArchive } from './chatgpt/currentChatExport'
-import { discoverProject, ProjectChatLimitError, readChatGptProject } from './chatgpt/projectReader'
+import { detectChatGptPageContext } from './chatgpt/pageContext'
+import { discoverProject, ProjectChatLimitError } from './chatgpt/projectReader'
 import type { ChatGptProject, ProjectExportOptions } from './chatgpt/projectTypes'
 import { ToastManager } from './services/toast'
 import { isProgressMessage, type CancelProjectExportMessage, type DownloadArchiveMessage, type DownloadArchiveResponse, type ExtractCurrentChatResponse, type ProjectExportProgressMessage, type ProjectExportResult, type StartProjectExportMessage } from './types/extensionMessages'
 
-export const CONTENT_ROOT_ID = 'chat-export-extension-root'; export const CONTENT_BUTTON_ID = 'chat-export-extension-button'; export const PROJECT_BUTTON_ID = 'chat-export-project-button'
-let exporting = false; let exportId: string | undefined; let observer: MutationObserver | undefined; let scheduled = false; let toasts: ToastManager | undefined
-const toast = (message: string, variant: 'info' | 'success' | 'warning' | 'error' | 'progress', id: string = crypto.randomUUID(), persistent = false) => toasts?.show({ id, groupId: id, message, variant, persistent })
-function busy(value: boolean): void { exporting = value; const shadow = document.getElementById(CONTENT_ROOT_ID)?.shadowRoot; shadow?.querySelectorAll<HTMLButtonElement>('.export-action').forEach((button) => { button.disabled = value; button.setAttribute('aria-busy', String(value)) }); const cancel = shadow?.getElementById('cancel-project-export') as HTMLButtonElement | null; if (cancel) cancel.hidden = !value || !exportId }
-function finishProjectExport(): void { if (exportId) toasts?.dismiss(exportId); exportId = undefined; busy(false) }
-function projectTimeout(chatCount: number): number { return Math.min(30 * 60_000, Math.max(60_000, chatCount * 45_000)) }
+export const CONTENT_ROOT_ID = 'chat-export-extension-root'
+export const CONTENT_BUTTON_ID = 'chat-export-extension-button'
+export type ExportButtonMode = 'hidden' | 'chat-idle' | 'chat-exporting' | 'project-idle' | 'project-discovering' | 'project-exporting' | 'project-cancelling'
 
-export async function exportCurrentConversation(button: HTMLButtonElement): Promise<void> {
-  if (exporting) return; busy(true)
-  try { const conversation = readVisibleConversation(); if (!conversation.messages.length) { toast('In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.', 'warning'); return }
-    toast('Export wird erstellt …', 'progress', 'current-export', true); const archive = await createCurrentChatArchive(conversation); const response = await chrome.runtime.sendMessage<DownloadArchiveMessage, DownloadArchiveResponse>({ type: 'DOWNLOAD_ARCHIVE', filename: archive.filename, mimeType: 'application/zip', base64: archive.base64 }); toasts?.dismiss('current-export'); toast(response.ok ? 'Der Download wurde gestartet.' : response.error, response.ok ? 'success' : 'error')
-  } catch { toasts?.dismiss('current-export'); toast('Der Export konnte nicht erstellt werden. Bitte versuche es erneut.', 'error') } finally { busy(false); button.focus({ preventScroll: true }) }
+let buttonMode: ExportButtonMode = 'hidden'
+let exportId: string | undefined
+let observer: MutationObserver | undefined
+let scheduled = false
+let toasts: ToastManager | undefined
+let activeDocument: Document | undefined
+
+const toast = (message: string, variant: 'info' | 'success' | 'warning' | 'error' | 'progress', id: string = crypto.randomUUID(), persistent = false) => toasts?.show({ id, groupId: id, message, variant, persistent })
+const currentButton = (): HTMLButtonElement | undefined => activeDocument?.getElementById(CONTENT_ROOT_ID)?.shadowRoot?.getElementById(CONTENT_BUTTON_ID) as HTMLButtonElement | undefined
+const projectTimeout = (chatCount: number): number => Math.min(30 * 60_000, Math.max(60_000, chatCount * 45_000))
+
+export function renderExportButtonState(button: HTMLButtonElement, mode: ExportButtonMode): void {
+  const states: Record<ExportButtonMode, { text: string; label: string; hidden: boolean; disabled: boolean; busy: boolean }> = {
+    hidden: { text: '', label: 'Export auf dieser Seite nicht verfügbar', hidden: true, disabled: true, busy: false },
+    'chat-idle': { text: 'Aktuellen Chat exportieren', label: 'Aktuell geöffnete ChatGPT-Unterhaltung exportieren', hidden: false, disabled: false, busy: false },
+    'chat-exporting': { text: 'Aktuellen Chat exportieren', label: 'Aktuell geöffnete ChatGPT-Unterhaltung wird exportiert', hidden: false, disabled: true, busy: true },
+    'project-idle': { text: 'Ganzes Projekt exportieren', label: 'Alle Chats des aktuell geöffneten ChatGPT-Projekts exportieren', hidden: false, disabled: false, busy: false },
+    'project-discovering': { text: 'Ganzes Projekt exportieren', label: 'ChatGPT-Projekt wird analysiert', hidden: false, disabled: true, busy: true },
+    'project-exporting': { text: 'Export abbrechen', label: 'Laufenden Projekt-Export abbrechen', hidden: false, disabled: false, busy: true },
+    'project-cancelling': { text: 'Export wird abgebrochen …', label: 'Projekt-Export wird abgebrochen', hidden: false, disabled: true, busy: true },
+  }
+  const state = states[mode]
+  button.textContent = state.text
+  button.hidden = state.hidden
+  button.disabled = state.disabled
+  button.setAttribute('aria-busy', String(state.busy))
+  button.setAttribute('aria-label', state.label)
+  button.dataset.mode = mode
+  button.classList.toggle('cancel-action', mode === 'project-exporting' || mode === 'project-cancelling')
 }
+
+function setButtonMode(mode: ExportButtonMode): void {
+  buttonMode = mode
+  const button = currentButton()
+  if (button) renderExportButtonState(button, mode)
+}
+
+export function updateButtonFromCurrentPageContext(documentRef: Document = activeDocument ?? document): void {
+  activeDocument = documentRef
+  if (exportId && (buttonMode === 'project-exporting' || buttonMode === 'project-cancelling')) return
+  const context = detectChatGptPageContext(documentRef)
+  setButtonMode(context.type === 'chat' ? 'chat-idle' : context.type === 'project-overview' ? 'project-idle' : 'hidden')
+}
+
+function finishProjectExport(activeId?: string): void {
+  if (activeId && exportId !== activeId) return
+  if (exportId) toasts?.dismiss(exportId)
+  exportId = undefined
+  updateButtonFromCurrentPageContext()
+}
+
+export async function exportCurrentConversation(button: HTMLButtonElement = currentButton()!): Promise<void> {
+  if (buttonMode !== 'chat-idle') return
+  setButtonMode('chat-exporting')
+  try {
+    const conversation = readVisibleConversation()
+    if (!conversation.messages.length) { toast('In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.', 'warning'); return }
+    toast('Export wird erstellt …', 'progress', 'current-export', true)
+    const archive = await createCurrentChatArchive(conversation)
+    const response = await chrome.runtime.sendMessage<DownloadArchiveMessage, DownloadArchiveResponse>({ type: 'DOWNLOAD_ARCHIVE', filename: archive.filename, mimeType: 'application/zip', base64: archive.base64 })
+    toasts?.dismiss('current-export')
+    toast(response.ok ? 'Der Download wurde gestartet.' : response.error, response.ok ? 'success' : 'error')
+  } catch {
+    toasts?.dismiss('current-export')
+    toast('Der Export konnte nicht erstellt werden. Bitte versuche es erneut.', 'error')
+  } finally {
+    updateButtonFromCurrentPageContext()
+    button.focus({ preventScroll: true })
+  }
+}
+
 function dialog(project: ChatGptProject, trigger: HTMLButtonElement): Promise<ProjectExportOptions | undefined> {
-  return new Promise((resolve) => { const shadow = trigger.getRootNode() as ShadowRoot; const overlay = document.createElement('div'); overlay.className = 'dialog-overlay'; overlay.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title" aria-describedby="project-dialog-description"><h2 id="project-dialog-title">Ganzes Projekt exportieren</h2><p><strong>${project.title.replace(/[<>&]/g, '')}</strong><br>${project.chats.length} Projektchats, ${project.files.length} Dateiverweise</p><p id="project-dialog-description">Die Erweiterung öffnet die Chats dieses Projekts nacheinander, liest die im Browser sichtbaren Inhalte und erstellt daraus lokal eine ZIP-Datei. Es werden keine Daten an einen externen Server übertragen.</p><p>Das ZIP enthält Projektinformationen sowie nummerierte Chatordner mit JSON und Markdown.</p><fieldset><legend>Inhalte</legend><label><input name="chats" type="checkbox" checked> Projektchats exportieren</label><label><input name="projectInformation" type="checkbox" checked> Projektinformationen exportieren</label><label><input name="instructions" type="checkbox" ${project.instructions ? 'checked' : 'disabled'}> Projektanweisungen exportieren, falls verfügbar</label><label><input name="fileReferences" type="checkbox" checked> sichtbare Dateiverweise exportieren</label><label><input name="downloadableFiles" type="checkbox"> tatsächlich herunterladbare Dateien exportieren</label></fieldset><div class="dialog-actions"><button type="button" data-cancel>Abbrechen</button><button type="button" data-confirm>Projekt exportieren</button></div></section>`; shadow.append(overlay)
-    const finish = (result?: ProjectExportOptions) => { overlay.remove(); trigger.focus({ preventScroll: true }); resolve(result) }; const cancel = () => finish(); overlay.querySelector('[data-cancel]')?.addEventListener('click', cancel); overlay.addEventListener('keydown', (event) => { if (event.key === 'Escape') cancel() }); overlay.querySelector('[data-confirm]')?.addEventListener('click', () => { const checked = (name: string) => (overlay.querySelector(`[name="${name}"]`) as HTMLInputElement).checked; finish({ chats: checked('chats'), projectInformation: checked('projectInformation'), instructions: checked('instructions'), fileReferences: checked('fileReferences'), downloadableFiles: checked('downloadableFiles') }) }); (overlay.querySelector('[data-cancel]') as HTMLButtonElement).focus()
+  return new Promise((resolve) => {
+    const shadow = trigger.getRootNode() as ShadowRoot
+    const overlay = document.createElement('div')
+    overlay.className = 'dialog-overlay'
+    overlay.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="project-dialog-title" aria-describedby="project-dialog-description"><h2 id="project-dialog-title">Ganzes Projekt exportieren</h2><p><strong>${project.title.replace(/[<>&]/g, '')}</strong><br>${project.chats.length} Projektchats, ${project.files.length} Dateiverweise</p><p id="project-dialog-description">Die Erweiterung öffnet die Chats dieses Projekts nacheinander, liest die im Browser sichtbaren Inhalte und erstellt daraus lokal eine ZIP-Datei. Es werden keine Daten an einen externen Server übertragen.</p><p>Das ZIP enthält Projektinformationen sowie nummerierte Chatordner mit JSON und Markdown.</p><fieldset><legend>Inhalte</legend><label><input name="chats" type="checkbox" checked> Projektchats exportieren</label><label><input name="projectInformation" type="checkbox" checked> Projektinformationen exportieren</label><label><input name="instructions" type="checkbox" ${project.instructions ? 'checked' : 'disabled'}> Projektanweisungen exportieren, falls verfügbar</label><label><input name="fileReferences" type="checkbox" checked> sichtbare Dateiverweise exportieren</label><label><input name="downloadableFiles" type="checkbox"> tatsächlich herunterladbare Dateien exportieren</label></fieldset><div class="dialog-actions"><button type="button" data-cancel>Abbrechen</button><button type="button" data-confirm>Projekt exportieren</button></div></section>`
+    shadow.append(overlay)
+    const finish = (result?: ProjectExportOptions) => { overlay.remove(); trigger.focus({ preventScroll: true }); resolve(result) }
+    const cancel = () => finish()
+    overlay.querySelector('[data-cancel]')?.addEventListener('click', cancel)
+    overlay.addEventListener('keydown', (event) => { if (event.key === 'Escape') cancel() })
+    overlay.querySelector('[data-confirm]')?.addEventListener('click', () => {
+      const checked = (name: string) => (overlay.querySelector(`[name="${name}"]`) as HTMLInputElement).checked
+      finish({ chats: checked('chats'), projectInformation: checked('projectInformation'), instructions: checked('instructions'), fileReferences: checked('fileReferences'), downloadableFiles: checked('downloadableFiles') })
+    })
+    ;(overlay.querySelector('[data-cancel]') as HTMLButtonElement).focus()
   })
 }
-export async function exportProject(trigger: HTMLButtonElement): Promise<void> {
-  if (exporting) return; toast('Projekt wird analysiert …', 'progress', 'project-discovery', true)
+
+export async function exportProject(trigger: HTMLButtonElement = currentButton()!): Promise<void> {
+  if (buttonMode !== 'project-idle') return
+  setButtonMode('project-discovering')
+  toast('Projekt wird analysiert …', 'progress', 'project-discovery', true)
   let project: ChatGptProject | undefined
-  try { project = await discoverProject() } catch (error) { toasts?.dismiss('project-discovery'); toast(error instanceof ProjectChatLimitError ? error.message : 'Das Projekt konnte nicht analysiert werden.', 'error'); return }
-  toasts?.dismiss('project-discovery'); if (!project) { toast('Auf dieser Seite wurde kein ChatGPT-Projekt erkannt.', 'warning'); return }
-  if (!project.chats.length) { toast('In diesem Projekt wurden keine exportierbaren Chats gefunden.', 'warning'); return }
-  toast(`${project.chats.length} Projekt-Chats wurden gefunden.`, 'info'); const options = await dialog(project, trigger); if (!options) return
-  exporting = true; exportId = crypto.randomUUID(); busy(true); toast('Projekt wird analysiert …', 'progress', exportId, true)
-  const activeExportId = exportId
+  try { project = await discoverProject(activeDocument ?? document) }
+  catch (error) {
+    toasts?.dismiss('project-discovery')
+    toast(error instanceof ProjectChatLimitError ? error.message : 'Das Projekt konnte nicht analysiert werden.', 'error')
+    updateButtonFromCurrentPageContext()
+    return
+  }
+  toasts?.dismiss('project-discovery')
+  if (!project) { toast('Auf dieser Seite wurde kein ChatGPT-Projekt erkannt.', 'warning'); updateButtonFromCurrentPageContext(); return }
+  if (!project.chats.length) { toast('In diesem Projekt wurden keine exportierbaren Chats gefunden.', 'warning'); updateButtonFromCurrentPageContext(); return }
+  toast(`${project.chats.length} Projekt-Chats wurden gefunden.`, 'info')
+  const options = await dialog(project, trigger)
+  if (!options) { updateButtonFromCurrentPageContext(); return }
+
+  exportId = crypto.randomUUID()
+  const activeId = exportId
+  setButtonMode('project-exporting')
+  toast('Projekt wird analysiert …', 'progress', activeId, true)
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('project-timeout')), projectTimeout(project.chats.length)) })
-    const result = await Promise.race([chrome.runtime.sendMessage<StartProjectExportMessage, ProjectExportResult>({ type: 'START_PROJECT_EXPORT', exportId, project, options }), timeout])
+    const result = await Promise.race([chrome.runtime.sendMessage<StartProjectExportMessage, ProjectExportResult>({ type: 'START_PROJECT_EXPORT', exportId: activeId, project, options }), timeout])
+    if (exportId !== activeId) return
     if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('invalid-response')
-    if (!result.ok) toast(result.message, result.errorCode === 'CANCELLED' ? 'info' : 'error'); else if (result.failedChats) toast(`${result.exportedChats} von ${project.chats.length} Chats wurden exportiert. ${result.failedChats === 1 ? 'Ein Chat konnte nicht gelesen werden.' : `${result.failedChats} Chats konnten nicht gelesen werden.`}`, 'warning'); else toast('Der Projekt-Download wurde gestartet.', 'success')
+    if (!result.ok) toast(result.message, result.errorCode === 'CANCELLED' ? 'info' : 'error')
+    else if (result.failedChats) toast(`${result.exportedChats} von ${project.chats.length} Chats wurden exportiert. ${result.failedChats === 1 ? 'Ein Chat konnte nicht gelesen werden.' : `${result.failedChats} Chats konnten nicht gelesen werden.`}`, 'warning')
+    else toast('Der Projekt-Download wurde gestartet.', 'success')
   } catch (error) {
-    if (error instanceof Error && error.message === 'project-timeout') { void chrome.runtime.sendMessage<CancelProjectExportMessage, unknown>({ type: 'CANCEL_PROJECT_EXPORT', exportId: activeExportId }); toast('Der Projekt-Export hat zu lange gedauert und wurde beendet.', 'error') }
-    else toast('Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.', 'error')
-  } finally { if (timer) clearTimeout(timer); finishProjectExport() }
+    if (exportId !== activeId) return
+    if (error instanceof Error && error.message === 'project-timeout') {
+      void chrome.runtime.sendMessage<CancelProjectExportMessage, unknown>({ type: 'CANCEL_PROJECT_EXPORT', exportId: activeId })
+      toast('Der Projekt-Export hat zu lange gedauert und wurde beendet.', 'error')
+    } else toast('Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.', 'error')
+  } finally {
+    if (timer) clearTimeout(timer)
+    finishProjectExport(activeId)
+  }
 }
-function progress(message: ProjectExportProgressMessage): void { if (!exportId || message.exportId !== exportId) return; const text = message.status === 'exporting' ? `Chat ${message.completed + 1} von ${message.total} wird exportiert: ${message.currentChatTitle ?? ''}` : message.status === 'packaging' ? 'ZIP-Datei wird erstellt …' : message.status === 'downloading' ? 'Download wird gestartet …' : 'Projekt wird analysiert …'; if (!['completed', 'cancelled', 'failed'].includes(message.status)) toast(text, 'progress', message.exportId, true) }
+
+export async function cancelProjectExport(): Promise<void> {
+  if (buttonMode !== 'project-exporting' || !exportId) return
+  const activeId = exportId
+  setButtonMode('project-cancelling')
+  try {
+    await chrome.runtime.sendMessage<CancelProjectExportMessage, unknown>({ type: 'CANCEL_PROJECT_EXPORT', exportId: activeId })
+    if (exportId === activeId) toast('Der Projekt-Export wurde abgebrochen.', 'info')
+  } catch {
+    if (exportId === activeId) toast('Das Projekt konnte nicht exportiert werden. Bitte versuche es erneut.', 'error')
+  } finally { finishProjectExport(activeId) }
+}
+
+export async function handleContextualExportButtonClick(): Promise<void> {
+  const button = currentButton()
+  if (!button) return
+  switch (buttonMode) {
+    case 'chat-idle': await exportCurrentConversation(button); break
+    case 'project-idle': await exportProject(button); break
+    case 'project-exporting': await cancelProjectExport(); break
+  }
+}
+
+function progress(message: ProjectExportProgressMessage): void {
+  if (!exportId || message.exportId !== exportId) return
+  const text = message.status === 'exporting' ? `Chat ${message.completed + 1} von ${message.total} wird exportiert: ${message.currentChatTitle ?? ''}` : message.status === 'packaging' ? 'ZIP-Datei wird erstellt …' : message.status === 'downloading' ? 'Download wird gestartet …' : 'Projekt wird analysiert …'
+  if (!['completed', 'cancelled', 'failed'].includes(message.status)) toast(text, 'progress', message.exportId, true)
+}
+
+const SHADOW_STYLES = `:host{all:initial;position:fixed;right:14px;bottom:80px;z-index:10000;font:12px/1.4 system-ui,sans-serif}.toast-region{display:grid;gap:6px;margin-bottom:8px;width:min(320px,calc(100vw - 28px))}.toast{display:flex;gap:8px;align-items:flex-start;padding:10px;border-left:4px solid #3578b8;border-radius:8px;background:#fff;color:#17201d;box-shadow:0 3px 14px #0003;overflow-wrap:anywhere}.toast[data-variant=success]{border-color:#087a58}.toast[data-variant=warning]{border-color:#ba7400}.toast[data-variant=error]{border-color:#b42318}.toast-close{margin-left:auto;border:0;background:transparent;color:inherit;font-size:18px;cursor:pointer}.actions{display:grid;justify-items:end;gap:6px}.export-action{all:initial;box-sizing:border-box;display:block;max-width: min(175px, calc(100vw - 24px));padding: 7px 10px;border:1px solid #3f3f46;border-radius:999px;background:#3f3f46;color:#ffffff;box-shadow:0 2px 9px #0003;cursor:pointer;font: 600 11px/1.25 system-ui, sans-serif;text-align:center}.export-action:hover:not(:disabled){border-color:#27272a;background:#27272a}.export-action:active:not(:disabled){border-color:#18181b;background:#18181b}.export-action:focus-visible,.toast:focus-visible,.dialog button:focus-visible{outline:3px solid #f5a623;outline-offset:2px}.export-action:disabled{cursor:wait;opacity:.65}.export-action.cancel-action{border-color:#9f2d26;background:#9f2d26}.export-action.cancel-action:hover:not(:disabled){border-color:#84231e;background:#84231e}.export-action.cancel-action:active:not(:disabled){border-color:#6f1d19;background:#6f1d19}.export-action[data-mode=project-cancelling]{opacity:.65}.dialog-overlay{position:fixed;inset:0;display:grid;place-items:center;background:#0008}.dialog{box-sizing:border-box;width:min(520px,calc(100vw - 30px));max-height:calc(100vh - 30px);overflow:auto;padding:20px;border-radius:12px;background:#fff;color:#17201d;box-shadow:0 8px 30px #0005}.dialog h2{font-size:20px}.dialog label{display:block;margin:8px 0}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.dialog button{padding:8px 12px}@media(prefers-color-scheme:dark){.toast,.dialog{background:#202925;color:#edf3f0}}`
+
 export function ensureExportButton(documentRef: Document = document): HTMLElement {
-  const existing = documentRef.getElementById(CONTENT_ROOT_ID); if (existing) { const projectButton = existing.shadowRoot?.getElementById(PROJECT_BUTTON_ID) as HTMLButtonElement | null; if (projectButton) projectButton.hidden = !readChatGptProject(documentRef); return existing }
-  const host = documentRef.createElement('div'); host.id = CONTENT_ROOT_ID; const shadow = host.attachShadow({ mode: 'open' }); shadow.innerHTML = `<style>:host{all:initial;position:fixed;right:14px;bottom:80px;z-index:10000;font:12px/1.4 system-ui,sans-serif}.toast-region{display:grid;gap:6px;margin-bottom:8px;width:min(320px,calc(100vw - 28px))}.toast{display:flex;gap:8px;align-items:flex-start;padding:10px;border-left:4px solid #3578b8;border-radius:8px;background:#fff;color:#17201d;box-shadow:0 3px 14px #0003;overflow-wrap:anywhere}.toast[data-variant=success]{border-color:#087a58}.toast[data-variant=warning]{border-color:#ba7400}.toast[data-variant=error]{border-color:#b42318}.toast-close{margin-left:auto;border:0;background:transparent;color:inherit;font-size:18px;cursor:pointer}.actions{display:grid;justify-items:end;gap:6px}.export-action,#cancel-project-export{all:initial;box-sizing:border-box;display:block;max-width: min(175px, calc(100vw - 24px)); padding: 7px 10px;border:1px solid;border-radius:999px;box-shadow:0 2px 9px #0003;cursor:pointer;font: 600 11px/1.25 system-ui, sans-serif;text-align:center}.export-action{border-color:#3f3f46;background:#3f3f46;color:#ffffff}.export-action:hover:not(:disabled){border-color:#27272a;background:#27272a}.export-action:active:not(:disabled){border-color:#18181b;background:#18181b}.export-action:focus-visible,#cancel-project-export:focus-visible,.toast:focus-visible,.dialog button:focus-visible{outline:3px solid #f5a623;outline-offset:2px}.export-action:disabled{border-color:#3f3f46;background:#3f3f46;cursor:wait;opacity:.65}#cancel-project-export{border-color:#8d2922;background:#8d2922;color:white}.dialog-overlay{position:fixed;inset:0;display:grid;place-items:center;background:#0008}.dialog{box-sizing:border-box;width:min(520px,calc(100vw - 30px));max-height:calc(100vh - 30px);overflow:auto;padding:20px;border-radius:12px;background:#fff;color:#17201d;box-shadow:0 8px 30px #0005}.dialog h2{font-size:20px}.dialog label{display:block;margin:8px 0}.dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.dialog button{padding:8px 12px}@media(prefers-color-scheme:dark){.toast,.dialog{background:#202925;color:#edf3f0}.export-action{border-color:#3f3f46;background:#3f3f46;color:#ffffff}.export-action:hover:not(:disabled){border-color:#27272a;background:#27272a}.export-action:active:not(:disabled){border-color:#18181b;background:#18181b}.export-action:disabled{border-color:#3f3f46;background:#3f3f46}}</style><div class="toast-region" aria-label="Benachrichtigungen"></div><div class="actions"></div>`
-  const actions = shadow.querySelector('.actions')!; const current = documentRef.createElement('button'); current.id = CONTENT_BUTTON_ID; current.className = 'export-action'; current.type = 'button'; current.textContent = 'Aktuellen Chat exportieren'; current.setAttribute('aria-label', 'Aktuell geöffnete ChatGPT-Unterhaltung exportieren'); current.addEventListener('click', () => void exportCurrentConversation(current)); const project = documentRef.createElement('button'); project.id = PROJECT_BUTTON_ID; project.className = 'export-action'; project.type = 'button'; project.textContent = 'Ganzes Projekt exportieren'; project.hidden = !readChatGptProject(documentRef); project.addEventListener('click', () => void exportProject(project)); const cancel = documentRef.createElement('button'); cancel.id = 'cancel-project-export'; cancel.type = 'button'; cancel.hidden = true; cancel.textContent = 'Export abbrechen'; cancel.addEventListener('click', () => { if (exportId) void chrome.runtime.sendMessage<CancelProjectExportMessage, unknown>({ type: 'CANCEL_PROJECT_EXPORT', exportId }) }); actions.append(current, project, cancel); documentRef.body.append(host); toasts = new ToastManager(shadow.querySelector('.toast-region') as HTMLElement); return host
+  activeDocument = documentRef
+  const existing = documentRef.getElementById(CONTENT_ROOT_ID)
+  if (existing) { updateButtonFromCurrentPageContext(documentRef); return existing }
+  const host = documentRef.createElement('div')
+  host.id = CONTENT_ROOT_ID
+  const shadow = host.attachShadow({ mode: 'open' })
+  shadow.innerHTML = `<style>${SHADOW_STYLES}</style><div class="toast-region" aria-label="Benachrichtigungen"></div><div class="actions"></div>`
+  const button = documentRef.createElement('button')
+  button.id = CONTENT_BUTTON_ID
+  button.className = 'export-action'
+  button.type = 'button'
+  button.addEventListener('click', () => void handleContextualExportButtonClick())
+  shadow.querySelector('.actions')?.append(button)
+  documentRef.body.append(host)
+  toasts = new ToastManager(shadow.querySelector('.toast-region') as HTMLElement)
+  updateButtonFromCurrentPageContext(documentRef)
+  return host
 }
-export function startContentScript(documentRef: Document = document): MutationObserver { ensureExportButton(documentRef); if (observer) return observer; observer = new MutationObserver(() => { if (!scheduled) { scheduled = true; queueMicrotask(() => { scheduled = false; ensureExportButton(documentRef) }) } }); observer.observe(documentRef.body, { childList: true, subtree: true }); return observer }
-chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => { if (typeof message === 'object' && message !== null && (message as Record<string, unknown>).type === 'EXTRACT_CURRENT_CHAT') { const conversation = readVisibleConversation(); const response: ExtractCurrentChatResponse = conversation.messages.length ? { ok: true, conversation } : { ok: false, message: 'Keine sichtbare Unterhaltung gefunden.' }; sendResponse(response); return false } if (isProgressMessage(message)) progress(message); return undefined })
+
+export function startContentScript(documentRef: Document = document): MutationObserver {
+  ensureExportButton(documentRef)
+  if (observer) return observer
+  observer = new MutationObserver(() => {
+    if (scheduled) return
+    scheduled = true
+    queueMicrotask(() => { scheduled = false; ensureExportButton(documentRef); updateButtonFromCurrentPageContext(documentRef) })
+  })
+  observer.observe(documentRef.body, { childList: true, subtree: true })
+  return observer
+}
+
+chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+  if (typeof message === 'object' && message !== null && (message as Record<string, unknown>).type === 'EXTRACT_CURRENT_CHAT') {
+    const conversation = readVisibleConversation()
+    const response: ExtractCurrentChatResponse = conversation.messages.length ? { ok: true, conversation } : { ok: false, message: 'Keine sichtbare Unterhaltung gefunden.' }
+    sendResponse(response)
+    return false
+  }
+  if (isProgressMessage(message)) progress(message)
+  return undefined
+})
+
 if (typeof document !== 'undefined' && document.body) startContentScript()

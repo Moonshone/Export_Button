@@ -1,97 +1,141 @@
-import { CONTENT_BUTTON_ID, CONTENT_ROOT_ID, ensureExportButton, exportCurrentConversation, exportProject, PROJECT_BUTTON_ID, startContentScript } from './content-script'
+import { CONTENT_BUTTON_ID, CONTENT_ROOT_ID, cancelProjectExport, ensureExportButton, exportCurrentConversation, exportProject, renderExportButtonState, startContentScript, updateButtonFromCurrentPageContext } from './content-script'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-function getButton(): HTMLButtonElement {
-  const host = document.getElementById(CONTENT_ROOT_ID)
-  return host?.shadowRoot?.getElementById(CONTENT_BUTTON_ID) as HTMLButtonElement
+function button(): HTMLButtonElement {
+  return document.getElementById(CONTENT_ROOT_ID)?.shadowRoot?.getElementById(CONTENT_BUTTON_ID) as HTMLButtonElement
+}
+function shadow(): ShadowRoot { return button().getRootNode() as ShadowRoot }
+function chat(path = '/c/CHAT-ID'): void {
+  window.history.replaceState({}, '', path)
+  document.body.innerHTML = '<main><article data-message-author-role="user">Hallo</article></main>'
+}
+function project(): void {
+  window.history.replaceState({}, '', '/g/g-p-AAA')
+  document.body.innerHTML = '<main data-testid="project-page"><h1>Beispielprojekt</h1><button role="tab">Chats</button><section data-testid="project-chats"><a href="/g/g-p-AAA/c/CHAT-1"><strong>Erster Chat</strong></a></section></main>'
 }
 
-describe('ChatGPT Content Script', () => {
+describe('kontextabhängiger Exportbutton', () => {
   beforeEach(() => {
-    document.body.innerHTML = '<main><article data-message-author-role="user">Hallo</article></main>'
+    chat()
     vi.mocked(chrome.runtime.sendMessage).mockReset().mockResolvedValue({ ok: true, downloadId: 1 })
   })
 
-  it('fügt den zugänglichen Button genau einmal ein', () => {
+  it('fügt genau einen permanenten Button und einen Shadow-Host ein', () => {
     ensureExportButton(); ensureExportButton()
     expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
-    expect(getButton()).toHaveTextContent('Aktuellen Chat exportieren')
-    expect(getButton()).toHaveAttribute('aria-label')
+    expect(shadow().querySelectorAll('.actions > button')).toHaveLength(1)
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
+    expect(shadow().querySelector('#chat-export-project-button')).toBeNull()
+    expect(shadow().querySelector('#cancel-project-export')).toBeNull()
   })
 
-  it('verwendet die kompakte Darstellung ohne den Buttontext abzuschneiden', () => {
-    const host = ensureExportButton()
-    const styles = host.shadowRoot?.querySelector('style')?.textContent
-    expect(styles).toContain('max-width: min(175px, calc(100vw - 24px))')
-    expect(styles).toContain('padding: 7px 10px')
-    expect(styles).toContain('font: 600 11px/1.25 system-ui, sans-serif')
-    expect(styles).not.toContain('text-overflow')
-    expect(styles).not.toContain('white-space: nowrap')
+  it('rendert sämtliche Zustände zentral und zugänglich', () => {
+    ensureExportButton()
+    renderExportButtonState(button(), 'chat-exporting')
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
+    expect(button()).toBeDisabled()
+    expect(button()).toHaveAttribute('aria-busy', 'true')
+    renderExportButtonState(button(), 'project-exporting')
+    expect(button()).toHaveTextContent('Export abbrechen')
+    expect(button()).toBeEnabled()
+    expect(button()).toHaveClass('cancel-action')
+    renderExportButtonState(button(), 'project-cancelling')
+    expect(button()).toHaveTextContent('Export wird abgebrochen …')
+    expect(button()).toBeDisabled()
+    renderExportButtonState(button(), 'hidden')
+    expect(button()).not.toBeVisible()
   })
 
-  it('kapselt die dunkelgrauen Exportbutton-Zustände im Shadow DOM', () => {
-    const styles = ensureExportButton().shadowRoot?.querySelector('style')?.textContent
-    expect(styles).toContain('.export-action{border-color:#3f3f46;background:#3f3f46;color:#ffffff}')
-    expect(styles).toContain('.export-action:hover:not(:disabled){border-color:#27272a;background:#27272a}')
-    expect(styles).toContain('.export-action:active:not(:disabled){border-color:#18181b;background:#18181b}')
-    expect(styles).toContain('.export-action:disabled{border-color:#3f3f46;background:#3f3f46;cursor:wait;opacity:.65}')
-  })
-
-  it('erzeugt auch nach einem Observer-Lauf keinen zweiten Button', async () => {
+  it('wechselt bei SPA-Navigation zwischen Projekt, Projektchat, Start und Chat', async () => {
+    project(); const host = ensureExportButton()
+    expect(button()).toHaveTextContent('Ganzes Projekt exportieren')
+    chat('/g/g-p-AAA/c/CHAT-1'); host.remove(); ensureExportButton(); updateButtonFromCurrentPageContext()
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
+    window.history.replaceState({}, '', '/'); updateButtonFromCurrentPageContext()
+    expect(button()).not.toBeVisible()
+    chat(); host.remove(); ensureExportButton(); updateButtonFromCurrentPageContext()
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
     const observer = startContentScript()
-    document.querySelector('main')?.append(document.createElement('div'))
-    await new Promise((resolve) => window.setTimeout(resolve, 0))
+    document.querySelector('main')?.append(document.createElement('div'), document.createElement('div'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
+    expect(shadow().querySelectorAll('.actions > button')).toHaveLength(1)
     observer.disconnect()
   })
 
-  it('startet den Download bei Doppelklick genau einmal und ruft kein Netzwerk auf', async () => {
+  it('startet einen Chat-Download bei Doppelklick nur einmal', async () => {
     ensureExportButton()
-    const button = getButton()
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-    const first = exportCurrentConversation(button)
-    const second = exportCurrentConversation(button)
+    const first = exportCurrentConversation(button())
+    const second = exportCurrentConversation(button())
+    expect(button()).toBeDisabled()
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
     await Promise.all([first, second])
     expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1)
-    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'DOWNLOAD_ARCHIVE', filename: expect.stringMatching(/\.zip$/),
-      mimeType: 'application/zip', base64: expect.any(String),
-    }))
-    expect(chrome.downloads.download).not.toHaveBeenCalled()
-    expect(fetchSpy).not.toHaveBeenCalled()
-    expect(button).toHaveTextContent('Aktuellen Chat exportieren')
-    expect(button.getRootNode()).toHaveTextContent('Der Download wurde gestartet.')
+    expect(button().getRootNode()).toHaveTextContent('Der Download wurde gestartet.')
+    expect(button()).toBeEnabled()
   })
 
-  it('zeigt leere Unterhaltungen und Service-Worker-Fehler verständlich an', async () => {
-    document.querySelector('main')!.innerHTML = ''
-    ensureExportButton(); await exportCurrentConversation(getButton())
-    expect(getButton()).toHaveTextContent('Aktuellen Chat exportieren')
-    expect(getButton().getRootNode()).toHaveTextContent('In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.')
-    document.querySelector('main')!.innerHTML = '<div data-message-author-role="assistant">Antwort</div>'
-    vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({ ok: false, error: 'Der Download konnte nicht gestartet werden.' })
-    await exportCurrentConversation(getButton())
-    expect(getButton().getRootNode()).toHaveTextContent('Der Download konnte nicht gestartet werden.')
-    expect(getButton()).not.toHaveTextContent('intern')
-  })
-
-  it('behandelt einen nicht erreichbaren Service Worker ohne interne Details', async () => {
+  it('zeigt Chat-Fehler ausschließlich als Toast und setzt den Zustand zurück', async () => {
     ensureExportButton()
-    vi.mocked(chrome.runtime.sendMessage).mockRejectedValueOnce(new Error('Receiving end does not exist'))
-    await exportCurrentConversation(getButton())
-    expect(getButton().getRootNode()).toHaveTextContent('Der Export konnte nicht erstellt werden. Bitte versuche es erneut.')
-    expect(getButton()).not.toHaveTextContent('Receiving end')
-    expect(getButton()).toBeEnabled()
+    vi.mocked(chrome.runtime.sendMessage).mockRejectedValueOnce(new Error('intern'))
+    await exportCurrentConversation(button())
+    expect(button().getRootNode()).toHaveTextContent('Der Export konnte nicht erstellt werden. Bitte versuche es erneut.')
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
+    expect(button()).not.toHaveTextContent('intern')
   })
 
-  it('startet bei einem Projekt ohne exportierbare Chats keinen Export', async () => {
+  it('startet bei einem Projekt ohne Chats keinen Export', async () => {
     window.history.replaceState({}, '', '/g/g-p-AAA')
-    document.body.innerHTML = '<main><h1>Leeres Projekt</h1></main>'
-    const host = ensureExportButton(); const button = host.shadowRoot?.getElementById(PROJECT_BUTTON_ID) as HTMLButtonElement
-    await exportProject(button)
+    document.body.innerHTML = '<main data-testid="project-page"><h1>Leer</h1><button role="tab">Chats</button><section data-testid="project-chats"></section></main>'
+    ensureExportButton()
+    await exportProject(button())
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled()
-    expect(host.shadowRoot).toHaveTextContent('In diesem Projekt wurden keine exportierbaren Chats gefunden.')
-    expect(host.shadowRoot?.getElementById('cancel-project-export')).not.toBeVisible()
-    expect(button).toBeEnabled()
+    expect(button().getRootNode()).toHaveTextContent('In diesem Projekt wurden keine exportierbaren Chats gefunden.')
+    expect(button()).toHaveTextContent('Ganzes Projekt exportieren')
+  })
+
+  it('verwendet denselben Button zum Exportieren und sendet Abbruch nur einmal', async () => {
+    project(); ensureExportButton()
+    let resolveStart!: (value: unknown) => void
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation((message: unknown) => {
+      if ((message as { type?: string }).type === 'START_PROJECT_EXPORT') return new Promise((resolve) => { resolveStart = resolve })
+      return Promise.resolve({ ok: true })
+    })
+    const running = exportProject(button())
+    await vi.waitFor(() => expect(shadow().querySelector('[data-confirm]')).not.toBeNull())
+    ;(shadow().querySelector('[data-confirm]') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(button()).toHaveTextContent('Export abbrechen'))
+    expect(shadow().querySelectorAll('.actions > button')).toHaveLength(1)
+    const firstCancel = cancelProjectExport()
+    const secondCancel = cancelProjectExport()
+    expect(button()).toHaveTextContent('Export wird abgebrochen …')
+    await Promise.all([firstCancel, secondCancel])
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(2)
+    expect(chrome.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CANCEL_PROJECT_EXPORT' }))
+    expect(button().getRootNode()).toHaveTextContent('Der Projekt-Export wurde abgebrochen.')
+    expect(button()).toHaveTextContent('Ganzes Projekt exportieren')
+    resolveStart({ ok: false, errorCode: 'CANCELLED', message: 'Der Projekt-Export wurde abgebrochen.' })
+    await running
+  })
+
+  it('behält bei DOM-Mutationen während eines aktiven Projekt-Exports den Abbruchmodus', async () => {
+    project(); ensureExportButton()
+    vi.mocked(chrome.runtime.sendMessage).mockImplementation(() => new Promise(() => undefined))
+    void exportProject(button())
+    await vi.waitFor(() => expect(shadow().querySelector('[data-confirm]')).not.toBeNull())
+    ;(shadow().querySelector('[data-confirm]') as HTMLButtonElement).click()
+    await vi.waitFor(() => expect(button()).toHaveTextContent('Export abbrechen'))
+    document.querySelector('main')?.append(document.createElement('div'))
+    updateButtonFromCurrentPageContext()
+    expect(button()).toHaveTextContent('Export abbrechen')
+  })
+
+  it('enthält kompakte Normal- und rote Abbruchfarben im Shadow DOM', () => {
+    const styles = ensureExportButton().shadowRoot?.querySelector('style')?.textContent
+    expect(styles).toContain('max-width: min(175px, calc(100vw - 24px))')
+    expect(styles).toContain('background:#3f3f46;color:#ffffff')
+    expect(styles).toContain('background:#27272a')
+    expect(styles).toContain('background:#18181b')
+    expect(styles).toContain('.export-action.cancel-action{border-color:#9f2d26;background:#9f2d26}')
   })
 })

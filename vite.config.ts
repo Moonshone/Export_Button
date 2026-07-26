@@ -20,6 +20,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    environmentOptions: { jsdom: { url: 'https://chatgpt.com/' } },
     globals: true,
     setupFiles: './src/test/setup.ts',
   },
