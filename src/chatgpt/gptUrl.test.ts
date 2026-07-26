@@ -1,0 +1,3 @@
+import { describe, expect, it } from 'vitest'
+import { parseChatGptGptUrl } from './gptUrl'
+describe('parseChatGptGptUrl', () => { it('erkennt Detail- und Editorrouten', () => { expect(parseChatGptGptUrl('https://chatgpt.com/g/g-abc/?x=1#x')).toMatchObject({ type: 'detail', id: 'g-abc' }); expect(parseChatGptGptUrl('https://chatgpt.com/gpts/editor/g-abc?id=x')).toMatchObject({ type: 'editor', id: 'g-abc' }) }); it.each(['https://evil.example/g/x','https://x.chatgpt.com/g/x','javascript:alert(1)','data:text/plain,x','https://chatgpt.com:444/g/x'])('lehnt %s ab', (url) => expect(parseChatGptGptUrl(url)).toBeUndefined()) })

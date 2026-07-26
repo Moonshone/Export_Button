@@ -84,3 +84,25 @@ Die Erweiterung nutzt keine internen OpenAI-APIs, Cookies, Tokens, React-Interna
 10. Toasts im hellen und dunklen Farbschema prüfen.
 
 Diese Erweiterung ist kein offizielles OpenAI-Produkt.
+
+## Strukturierter Export benutzerdefinierter GPTs
+
+Der einzige kontextabhängige Button exportiert weiterhin einzelne Chats und Projektübersichten. Auf einer öffentlichen/geteilten GPT-Detailseite oder im Editor lautet er **„GPT exportieren“**; eine Unterhaltung mit einem GPT bleibt dagegen ein normaler Chat-Export.
+
+Vor dem Export zeigt ein barrierefreier Bestätigungsdialog die sichtbaren Inhalte und Optionen. Das lokal erzeugte ZIP enthält `gpt.json`, `manifest.json` und `README.txt` sowie – sofern vorhanden und ausgewählt – Anweisungen, Gesprächseinstiege, Wissensdateiverweise, Fähigkeiten, Apps, Aktionen, sichtbare redigierte OpenAPI-Schemas und einen Profilbildverweis. Tatsächliche Wissensdateien und Profilbilder sind standardmäßig deaktiviert. Nicht zugängliche Inhalte werden in `warnings.json` dokumentiert.
+
+Aktionsdaten werden rekursiv redigiert; API-Schlüssel, Tokens, Autorisierungswerte, Passwörter, Cookies, Client-Secrets und private Schlüssel werden nie exportiert. Die Erweiterung liest ausschließlich sichtbare DOM-Inhalte, nutzt keine internen ChatGPT-APIs oder Speicher und sendet keine Exportdaten an externe Server. Öffentliche Detailseitenexporte enthalten niemals erfundene interne Anweisungen oder Wissensdateien und sind ausdrücklich als teilweise gekennzeichnet.
+
+Projekt- und GPT-Exporte können über denselben Button abgebrochen werden. Persistente Fortschritts-Toasts werden während Analyse, Paketierung und Download aktualisiert.
+
+### Bekannte Grenzen
+
+ChatGPT kann seine Oberfläche und Routen ändern. Nicht sichtbare Bereiche sowie Dateien ohne normale sichtbare Downloadmöglichkeit werden ausgelassen. Die Erweiterung verändert, speichert oder veröffentlicht keine GPT-Konfiguration.
+
+### Lokale Installation
+
+1. `npm install` und `npm run build` ausführen.
+2. In Chrome `chrome://extensions` bzw. in Edge `edge://extensions` öffnen.
+3. Entwicklermodus aktivieren, **Entpackte Erweiterung laden** wählen und den Ordner `dist` auswählen.
+
+**Diese Erweiterung ist kein offizielles OpenAI-Produkt.**
