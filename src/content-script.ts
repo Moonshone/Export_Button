@@ -16,6 +16,7 @@ let observer: MutationObserver | undefined
 let scheduled = false
 let toasts: ToastManager | undefined
 let activeDocument: Document | undefined
+const navigationWindows = new WeakSet<Window>()
 
 const toast = (message: string, variant: 'info' | 'success' | 'warning' | 'error' | 'progress', id: string = crypto.randomUUID(), persistent = false) => toasts?.show({ id, groupId: id, message, variant, persistent })
 const currentButton = (): HTMLButtonElement | undefined => activeDocument?.getElementById(CONTENT_ROOT_ID)?.shadowRoot?.getElementById(CONTENT_BUTTON_ID) as HTMLButtonElement | undefined
@@ -196,6 +197,19 @@ export function ensureExportButton(documentRef: Document = document): HTMLElemen
 
 export function startContentScript(documentRef: Document = document): MutationObserver {
   ensureExportButton(documentRef)
+  const windowRef = documentRef.defaultView
+  if (windowRef && !navigationWindows.has(windowRef)) {
+    navigationWindows.add(windowRef)
+    const refresh = () => queueMicrotask(() => updateButtonFromCurrentPageContext(documentRef))
+    windowRef.addEventListener('popstate', refresh)
+    for (const method of ['pushState', 'replaceState'] as const) {
+      const original = windowRef.history[method].bind(windowRef.history)
+      windowRef.history[method] = ((data: unknown, unused: string, url?: string | URL | null) => {
+        original(data, unused, url)
+        refresh()
+      }) as History[typeof method]
+    }
+  }
   if (observer) return observer
   observer = new MutationObserver(() => {
     if (scheduled) return

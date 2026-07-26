@@ -63,6 +63,25 @@ describe('kontextabhängiger Exportbutton', () => {
     observer.disconnect()
   })
 
+  it('zeigt auf der realistischen /project-Seite sofort genau einen aktiven Projektbutton und reagiert auf History-Navigation', async () => {
+    const id = 'g-p-6a573250902081919dedfa9c50fc0692-ki-methoden'
+    window.history.replaceState({}, '', `/g/${id}/project`)
+    document.body.innerHTML = `<main><div><div contenteditable="true" data-placeholder="Neuer Chat in KI_Methoden"></div></div><div role="tablist"><button role="tab" aria-selected="true">Chats</button><button role="tab">Quellen</button></div><div role="tabpanel">${[1, 2, 3].map((number) => `<a href="/g/${id}/c/chat-${number}"><strong>Chat ${number}</strong></a>`).join('')}</div></main>`
+    startContentScript()
+    expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
+    expect(button()).toHaveTextContent('Ganzes Projekt exportieren')
+    expect(button()).toBeVisible(); expect(button()).toBeEnabled()
+    expect(button()).toHaveAttribute('aria-busy', 'false'); expect(button()).toHaveAttribute('data-mode', 'project-idle')
+    expect(shadow().querySelectorAll('.actions > button')).toHaveLength(1)
+
+    window.history.pushState({}, '', `/g/${id}/c/chat-1`)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(button()).toHaveTextContent('Aktuellen Chat exportieren')
+    window.history.replaceState({}, '', `/g/${id}/project`)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(button()).toHaveTextContent('Ganzes Projekt exportieren')
+  })
+
   it('startet einen Chat-Download bei Doppelklick nur einmal', async () => {
     ensureExportButton()
     const first = exportCurrentConversation(button())

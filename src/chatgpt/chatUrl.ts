@@ -5,9 +5,29 @@ export type ParsedChatGptChatUrl = {
   type: 'normal-chat' | 'project-chat'
 }
 
+export type ParsedProjectOverviewUrl = {
+  url: string
+  projectId: string
+  routeType: 'project-root' | 'project-overview'
+}
+
 const ID = '[A-Za-z0-9_-]+'
 const NORMAL_CHAT = new RegExp(`^/c/(${ID})/?$`)
 const PROJECT_CHAT = new RegExp(`^/g/(g-p-${ID})/c/(${ID})/?$`)
+export const PROJECT_OVERVIEW_ROUTE = new RegExp(`^/g/(g-p-${ID})(/project)?/?$`)
+
+/** Parses only the two public ChatGPT project overview route variants. */
+export function parseProjectOverviewUrl(value: string, baseUrl = 'https://chatgpt.com/'): ParsedProjectOverviewUrl | undefined {
+  try {
+    const url = new URL(value, baseUrl)
+    if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com' || url.port) return undefined
+    const match = url.pathname.match(PROJECT_OVERVIEW_ROUTE)
+    if (!match) return undefined
+    return { url: url.href, projectId: match[1], routeType: match[2] ? 'project-overview' : 'project-root' }
+  } catch {
+    return undefined
+  }
+}
 
 /** Parses only public ChatGPT chat routes; query strings and fragments are retained in url. */
 export function parseChatGptChatUrl(value: string, baseUrl = 'https://chatgpt.com/'): ParsedChatGptChatUrl | undefined {

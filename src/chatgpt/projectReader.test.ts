@@ -8,6 +8,15 @@ describe('Projektleser', () => {
     document.body.innerHTML = `<main><header><h1>KI-TEXT</h1></header><div role="tablist"><button role="tab" aria-selected="true">Chats</button></div><div role="tabpanel"><a href="/g/${id}/c/chat-1"><strong>Englischlernen mit GPT</strong><span>für wen ist dieses Tutorial geeignet?</span></a><a href="/g/${id}/c/chat-2"><strong>Logo für Instagram Account</strong><span>Bitte keine Füllfarbe verwenden.</span></a><a href="/g/${id}/c/chat-3"><strong>Vegan Social Media Strategie</strong><span>fertige Video-Skripte Szene für Szene</span></a><a href="/g/${id}/c/chat-3"><strong>Duplikat</strong></a><a hidden href="/g/${id}/c/hidden">Versteckt</a><a href="/g/g-p-ANDERES-PROJEKT/c/chat-4">Fremdprojekt</a></div></main>`
     expect(readChatGptProject()).toMatchObject({ id, title: 'KI-TEXT', chats: [{ id: 'chat-1', title: 'Englischlernen mit GPT' }, { id: 'chat-2', title: 'Logo für Instagram Account' }, { id: 'chat-3', title: 'Vegan Social Media Strategie' }] })
   })
+  it('liest die aktuelle /project-Seite, den Composer-Titel und nur eigene eindeutige Chats in DOM-Reihenfolge', () => {
+    const id = 'g-p-AAA'; window.history.replaceState({}, '', `/g/${id}/project`)
+    document.body.innerHTML = `<main><div contenteditable="true" aria-label="New chat in KI_Methoden"></div><div role="tabpanel"><a href="/g/${id}/c/chat-2"><strong>Zweiter</strong></a><a href="/g/${id}/c/chat-1"><strong>Erster</strong></a><a href="/g/${id}/c/chat-2">Duplikat</a><a href="/g/g-p-BBB/c/chat-3">Fremd</a></div></main>`
+    expect(readChatGptProject()).toMatchObject({ id, title: 'KI_Methoden', url: `https://chatgpt.com/g/${id}/project`, chats: [{ id: 'chat-2', position: 1 }, { id: 'chat-1', position: 2 }] })
+  })
+  it('verwendet auf /project ohne lesbaren Namen den neutralen Fallback', () => {
+    window.history.replaceState({}, '', '/g/g-p-AAA/project'); document.body.innerHTML = '<main></main>'
+    expect(readChatGptProject()?.title).toBe('ChatGPT-Projekt')
+  })
   it('erkennt ein Projekt mit Name, ID, Chats und Dateien', () => { page(); expect(readChatGptProject()).toMatchObject({ id: 'pro-1', title: 'Mein Projekt 👋', chats: [{ id: 'a', position: 1 }, { id: 'b', position: 2 }], instructions: 'Sei präzise.' }); expect(readChatGptProject()?.files).toHaveLength(1) })
   it('erkennt einen normalen Chat nicht', () => { window.history.replaceState({}, '', '/c/a'); document.body.innerHTML = '<main><h1>Chat</h1></main>'; expect(readChatGptProject()).toBeUndefined() })
   it('nutzt einen Projektnamen-Fallback', () => { page(); document.querySelector('h1')?.remove(); expect(readChatGptProject()?.title).toBe('ChatGPT-Projekt') })

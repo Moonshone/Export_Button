@@ -1,10 +1,12 @@
-import { parseChatGptChatUrl, projectIdFromChatGptUrl } from './chatUrl'
+import { parseChatGptChatUrl, parseProjectOverviewUrl } from './chatUrl'
 import { PROJECT_SELECTORS } from './projectSelectors'
 
 export type ChatGptPageContext =
   | { type: 'chat'; chatUrl: string }
   | { type: 'project-overview'; projectId?: string; projectTitle: string; projectUrl: string }
   | { type: 'unsupported' }
+
+const FALLBACK_PROJECT_TITLE = 'ChatGPT-Projekt'
 
 function isVisible(element: Element): boolean {
   if (element.closest('[hidden], [aria-hidden="true"]')) return false
@@ -20,6 +22,41 @@ function chatGptUrl(documentRef: Document): URL | undefined {
   }
 }
 
+function normalized(value: string | null | undefined): string | undefined {
+  const result = value?.replace(/\s+/g, ' ').trim()
+  return result || undefined
+}
+
+function composerTitle(element: Element): string | undefined {
+  for (const attribute of ['placeholder', 'data-placeholder', 'aria-label']) {
+    const value = normalized(element.getAttribute(attribute))
+    const match = value?.match(/^(?:Neuer Chat in|New chat in)\s+(.+)$/i)
+    if (match) return normalized(match[1])
+  }
+  return undefined
+}
+
+/** Reads a public, visible project title without relying on framework internals. */
+export function readVisibleProjectTitle(documentRef: Document, url: URL | string): string {
+  const main = Array.from(documentRef.querySelectorAll('main')).find(isVisible)
+  if (main) {
+    for (const selector of ['[data-testid="project-title"]', '[data-project-title]', 'h1']) {
+      const node = Array.from(main.querySelectorAll(selector)).find((candidate) => isVisible(candidate) && normalized(candidate.textContent))
+      const title = normalized(node?.textContent)
+      if (title) return title
+    }
+    for (const node of main.querySelectorAll(PROJECT_SELECTORS.projectComposer)) {
+      if (isVisible(node)) {
+        const title = composerTitle(node)
+        if (title) return title
+      }
+    }
+  }
+  const parsed = parseProjectOverviewUrl(typeof url === 'string' ? url : url.href)
+  const slug = parsed?.projectId.match(/^g-p-[0-9a-f]{32}-([a-z0-9]+(?:-[a-z0-9]+)*)$/i)?.[1]
+  return slug ? slug.replace(/-/g, ' ') : FALLBACK_PROJECT_TITLE
+}
+
 /** Detects exportable ChatGPT routes using the route and visible, public page markup only. */
 export function detectChatGptPageContext(documentRef: Document = document): ChatGptPageContext {
   const url = chatGptUrl(documentRef)
@@ -28,27 +65,27 @@ export function detectChatGptPageContext(documentRef: Document = document): Chat
   const chat = parseChatGptChatUrl(url.href)
   if (chat) return { type: 'chat', chatUrl: chat.url }
 
-  const projectMatch = url.pathname.match(/^\/g\/(g-p-[A-Za-z0-9_-]+)\/?$/)
-  if (!projectMatch) return { type: 'unsupported' }
+  const project = parseProjectOverviewUrl(url.href)
+  if (!project) return { type: 'unsupported' }
 
   const main = Array.from(documentRef.querySelectorAll('main')).find(isVisible)
   if (!main) return { type: 'unsupported' }
-  const title = Array.from(main.querySelectorAll(PROJECT_SELECTORS.title)).find((node) => isVisible(node) && Boolean(node.textContent?.trim()))
-  const chatsTab = Array.from(main.querySelectorAll('[role="tab"], button, a')).find((node) => isVisible(node) && node.textContent?.trim() === 'Chats')
+  const chatsTab = Array.from(main.querySelectorAll(PROJECT_SELECTORS.tab)).find((node) => isVisible(node) && node.textContent?.trim() === 'Chats')
   const chatContainer = Array.from(main.querySelectorAll(PROJECT_SELECTORS.chatContainer)).find(isVisible)
-  const expectedPrefix = `/g/${projectMatch[1]}/c/`
+  const composer = Array.from(main.querySelectorAll(PROJECT_SELECTORS.projectComposer)).find(isVisible)
+  const expectedPrefix = `/g/${project.projectId}/c/`
   const chatLinks = Array.from(main.querySelectorAll<HTMLAnchorElement>('a[href]')).filter((link) => {
     if (!isVisible(link)) return false
     try { return new URL(link.href, url.href).pathname.startsWith(expectedPrefix) } catch { return false }
   })
 
-  // A bare project-looking URL is insufficient. Require a visible title plus
-  // either its Chats tab/container or at least one project-owned chat link.
-  if (!title || (!chatsTab && !chatContainer && chatLinks.length === 0)) return { type: 'unsupported' }
+  // The explicit /project route is authoritative once its visible main exists.
+  // Legacy root routes still need a public DOM signal to avoid false positives.
+  if (project.routeType === 'project-root' && !chatsTab && !chatContainer && !composer && chatLinks.length === 0) return { type: 'unsupported' }
   return {
     type: 'project-overview',
-    projectId: projectIdFromChatGptUrl(url.href),
-    projectTitle: title.textContent?.replace(/\s+/g, ' ').trim() || 'ChatGPT-Projekt',
-    projectUrl: url.href,
+    projectId: project.projectId,
+    projectTitle: readVisibleProjectTitle(documentRef, url),
+    projectUrl: project.url,
   }
 }
