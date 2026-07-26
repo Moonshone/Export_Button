@@ -6,6 +6,8 @@ export interface VisibleMessage {
   role: ChatRole
   content: string
   position: number
+  codeBlocks: string[]
+  fileReferences: Array<{ name: string; url?: string }>
 }
 
 export interface VisibleConversation {
@@ -62,7 +64,12 @@ export function readVisibleConversation(documentRef: Document = document): Visib
   const elements = main ? Array.from(main.querySelectorAll(CHATGPT_SELECTORS.message)) : []
   const messages = elements
     .filter((element) => !isElementHidden(element))
-    .map((element) => ({ role: readRole(element), content: readText(element) }))
+    .map((element) => ({
+      role: readRole(element),
+      content: readText(element),
+      codeBlocks: Array.from(element.querySelectorAll('pre code')).filter((node) => !isElementHidden(node)).map((node) => node.textContent ?? ''),
+      fileReferences: Array.from(element.querySelectorAll<HTMLAnchorElement>('a[href][download], a[data-testid*="file" i]')).filter((node) => !isElementHidden(node)).map((node) => ({ name: node.getAttribute('download') || node.textContent?.trim() || 'Datei', url: node.href })),
+    }))
     .filter(({ content }) => content.length > 0)
     .map((message, index) => ({ ...message, position: index + 1 }))
 

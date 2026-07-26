@@ -1,0 +1,13 @@
+import JSZip from 'jszip'
+import { describe, expect, it } from 'vitest'
+import { createProjectArchive, safePathComponent } from './projectExport'
+import type { ChatGptProject, ExportedProjectChat, ProjectExportOptions } from './projectTypes'
+const project: ChatGptProject = { title: 'Projekt Grüße 👋', url: 'https://chatgpt.com/project/p', instructions: 'Hilf mir.', files: [{ name: 'Dokument.pdf', source: 'project', downloadable: false }], chats: [{ title: 'Gleich', url: 'https://chatgpt.com/c/a', position: 1 }, { title: 'Gleich', url: 'https://chatgpt.com/c/b', position: 2 }] }
+const conversation = (url: string) => ({ title: 'Gleich', url, messages: [{ role: 'user' as const, content: 'Grüße 👋', position: 1, codeBlocks: [], fileReferences: [] }] })
+const chats: ExportedProjectChat[] = project.chats.map((reference) => ({ reference, conversation: conversation(reference.url), exportedAt: '2026-07-26T12:00:00.000Z' }))
+const options: ProjectExportOptions = { chats: true, projectInformation: true, instructions: true, fileReferences: true, downloadableFiles: false }
+describe('Projektarchiv', () => {
+  it('erzeugt Struktur, eindeutige Ordner und UTF-8', async () => { const archive = await createProjectArchive({ project, chats, errors: [], options, extensionVersion: '0.2.0' }, new Date('2026-07-26T12:00:00Z')); const zip = await JSZip.loadAsync(archive.base64, { base64: true }); expect(Object.keys(zip.files)).toContain('project.json'); expect(zip.file('chats/001-Gleich/conversation.json')).not.toBeNull(); expect(zip.file('chats/002-Gleich-2/conversation.md')).not.toBeNull(); expect(zip.file('instructions/project-instructions.md')).not.toBeNull(); expect(zip.file('files/index.json')).not.toBeNull(); expect(await zip.file('chats/001-Gleich/conversation.md')!.async('string')).toContain('Grüße 👋'); expect(zip.file('errors.json')).not.toBeNull() })
+  it('lässt optionale Ordner und errors.json ohne Warnungen weg', async () => { const clean = { ...project, instructions: undefined, files: [] }; const archive = await createProjectArchive({ project: clean, chats, errors: [], options: { ...options, instructions: false, fileReferences: false }, extensionVersion: '1' }); const zip = await JSZip.loadAsync(archive.base64, { base64: true }); expect(zip.file('errors.json')).toBeNull(); expect(zip.folder('instructions')?.file('project-instructions.md')).toBeNull(); expect(JSON.parse(await zip.file('project.json')!.async('string')).complete).toBe(true) })
+  it('bereinigt gefährliche und reservierte Namen', () => { expect(safePathComponent('../CON')).not.toContain('..'); expect(safePathComponent('CON')).toBe('ChatGPT-Projekt'); expect(safePathComponent('A/B:*?')).toBe('A-B---') })
+})

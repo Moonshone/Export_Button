@@ -17,8 +17,8 @@ describe('ChatGPT-Unterhaltung aus dem DOM lesen', () => {
     renderConversation()
     const result = readVisibleConversation()
     expect(result.messages).toEqual([
-      { role: 'user', content: 'Erste Zeile\nZweite Zeile', position: 1 },
-      { role: 'assistant', content: 'Hier ist Code:\n\nconst answer = 42;\nconsole.log(answer)', position: 2 },
+      { role: 'user', content: 'Erste Zeile\nZweite Zeile', position: 1, codeBlocks: [], fileReferences: [] },
+      { role: 'assistant', content: 'Hier ist Code:\n\nconst answer = 42;\nconsole.log(answer)', position: 2, codeBlocks: ['const answer = 42;\nconsole.log(answer)'], fileReferences: [] },
     ])
     expect(result.title).toBe('Mein Testchat')
     expect(result.messages.map(({ content }) => content).join()).not.toContain('Andere Unterhaltung')

@@ -2,6 +2,7 @@ declare namespace chrome {
   namespace runtime {
     interface MessageSender {
       id?: string
+      tab?: tabs.Tab
     }
 
     interface MessageEvent {
@@ -10,6 +11,14 @@ declare namespace chrome {
 
     const onMessage: MessageEvent
     function sendMessage<M, R>(message: M): Promise<R>
+    function getManifest(): { version: string }
+  }
+  namespace tabs {
+    interface Tab { id?: number; status?: string; url?: string }
+    interface CreateProperties { url: string; active?: boolean }
+    function create(properties: CreateProperties): Promise<Tab>
+    function remove(tabId: number): Promise<void>
+    function sendMessage<M, R>(tabId: number, message: M): Promise<R>
   }
   namespace storage {
     interface StorageArea {

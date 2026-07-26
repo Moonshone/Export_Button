@@ -1,9 +1,6 @@
-# Lokaler Chat-Export – Browser-Erweiterung
+# Lokaler ChatGPT-Export – Browser-Erweiterung
 
-Installierbare Manifest-V3-Erweiterung für Google Chrome und Microsoft Edge.
-Das React-/TypeScript-Content-Script ergänzt auf `https://chatgpt.com/` einen
-Button, der ausschließlich die aktuell geöffnete, im DOM sichtbare Unterhaltung
-mit JSZip exportiert. Das vorhandene Popup bleibt verfügbar.
+Installierbare Manifest-V3-Erweiterung für Chrome und Edge mit zwei lokalen Exportmodi: **Aktuellen Chat exportieren** und – auf zuverlässig erkannten Projektseiten – **Ganzes Projekt exportieren**. JSZip erzeugt sämtliche Archive ausschließlich im Browser.
 
 ## Entwicklung
 
@@ -11,64 +8,79 @@ mit JSZip exportiert. Das vorhandene Popup bleibt verfügbar.
 npm install
 npm run lint
 npm run test:run
+npm run test:coverage
 npm run build
+npm run test:build
 ```
 
-Der Build erzeugt in `dist/` einen direkt ladbaren Erweiterungsordner mit
-`manifest.json`, `popup.html`, den gebündelten Assets und den Icons. Vite lädt
-keine externen Skripte oder CDN-Ressourcen.
+## Installation
 
-## Lokale Installation in Chrome
-
+### Chrome
 1. `npm run build` ausführen.
-2. `chrome://extensions` öffnen.
-3. **Entwicklermodus** aktivieren.
-4. **Entpackte Erweiterung laden** wählen.
-5. Den Ordner `dist/` auswählen und die Erweiterung bei Bedarf anheften.
+2. `chrome://extensions` öffnen und den Entwicklermodus aktivieren.
+3. **Entpackte Erweiterung laden** wählen und `dist/` auswählen.
 
-## Lokale Installation in Edge
-
+### Edge
 1. `npm run build` ausführen.
-2. `edge://extensions` öffnen.
-3. **Entwicklermodus** aktivieren.
-4. **Entpackte Erweiterung laden** wählen.
-5. Den Ordner `dist/` auswählen und die Erweiterung bei Bedarf anheften.
+2. `edge://extensions` öffnen und den Entwicklermodus aktivieren.
+3. **Entpackte Erweiterung laden** wählen und `dist/` auswählen.
 
-## Datenschutz und aktueller Chat-Export
+## Aktueller Chat
 
-Der Export wird ausschließlich im Browser erzeugt. Die Erweiterung sendet keine
-Nachrichten an Server, verwendet weder Analyse noch Tracking und liest keine
-Cookies, Authentifizierungstokens, `localStorage`- oder `sessionStorage`-Daten
-von ChatGPT. Sie ruft keine internen OpenAI-APIs auf, durchsucht nicht die
-Chat-Historie und speichert keine ChatGPT-Zugangsdaten. Das Content Script darf
-nur Inhalte auf `https://chatgpt.com/*` lesen; `<all_urls>` wird nicht verwendet.
+Der Seitenbutton liest ausschließlich die aktuell sichtbare Unterhaltung aus dem zugänglichen DOM. Das ZIP enthält `conversation.json`, `conversation.md` und `README.txt`. Der bestehende Popup-Export für Daten im Erweiterungsspeicher bleibt getrennt verfügbar.
 
-Das ZIP des Seitenbuttons enthält `conversation.json`, `conversation.md` und
-`README.txt`. Bilder, Anhänge sowie nicht sichtbare Inhalte können fehlen. Die
-Erweiterung ist kein offizielles OpenAI-Produkt.
+## Ganzes Projekt
 
-## Bestehender Popup-Export
+Auf einer erkannten Projektseite zeigt die Erweiterung einen zweiten Button. Ein zugänglicher Bestätigungsdialog nennt Projekt, Chat- und Dateianzahl und bietet Optionen. Danach öffnet der Service Worker immer nur einen Projektchat in einem inaktiven Tab, liest den sichtbaren Inhalt und schließt den Tab vor dem nächsten Chat. Fehler werden einmal wiederholt. **Export abbrechen** schließt temporäre Tabs und verhindert den Download.
 
-Unterhaltungen liegen unter dem Schlüssel `conversations` in
-`chrome.storage.local`. Der abstrahierte Storage-Service lädt, speichert und
-löscht ausschließlich diesen Schlüssel. Das ZIP-Archiv enthält:
+```text
+README.txt
+manifest.json
+project.json
+errors.json                           # nur bei Warnungen/Fehlern
+instructions/project-instructions.md # nur bei sichtbaren Anweisungen
+chats/001-Titel/conversation.json
+chats/001-Titel/conversation.md
+files/index.json
+files/README.txt
+```
 
-- `conversations.json`
-- `manifest.json`
-- `README.txt`
+Identische Chattitel erhalten eindeutige Ordner. `complete` ist nur `true`, wenn alle ausgewählten, entdeckten Inhalte enthalten sind. Teilfehler und fehlende Dateien werden ehrlich dokumentiert. Dateien, deren Download interne Endpunkte oder nicht zugängliche Anmeldedaten voraussetzt, werden nur als sichtbarer Verweis aufgenommen.
 
-Der Download wird über `chrome.downloads.download()` gestartet und heißt
-`chat-export-JJJJ-MM-TT-HH-mm.zip`.
+## Toasts und Fortschritt
 
-## Bekannte Einschränkungen
+Status, Erfolg und Fehler erscheinen als zugängliche Toasts; Buttontexte bleiben fest. Die automatische Dauer ist `3000 + Zeichenanzahl × 45 ms`, mindestens 3 und höchstens 15 Sekunden. Fortschritts-Toasts bleiben sichtbar und werden pro Export aktualisiert. Maximal drei Toasts sind gleichzeitig sichtbar; weitere warten. Fehler verwenden `role="alert"`, andere Meldungen `role="status"`.
 
-- ChatGPT kann sein DOM jederzeit ändern; alle ChatGPT-Selektoren sind deshalb
-  zentral gekapselt, müssen bei Änderungen der Seite aber eventuell angepasst werden.
-- Exportiert wird sichtbarer Text. Bilder, Anhänge und manche Formatierungen
-  sind möglicherweise nicht enthalten.
-- Daten werden nicht zwischen Browsern, Profilen oder Geräten übertragen.
-- Es gibt derzeit keinen Import und keine eigene Oberfläche zum Anlegen von
-  Chats; das Popup exportiert Daten, die andere lokale Erweiterungsfunktionen
-  unter dem dokumentierten Storage-Schlüssel abgelegt haben.
-- Entfernen der Erweiterung oder Löschen ihrer Browserdaten kann gespeicherte
-  Chats dauerhaft löschen.
+## Berechtigungen
+
+- `downloads`: speichert das lokal erzeugte ZIP.
+- `storage`: bleibt für den bestehenden lokalen Popup-Export erforderlich.
+- `tabs`: öffnet und schließt sequenziell einen inaktiven Projektchat-Tab.
+- `https://chatgpt.com/*`: enges Hostrecht für Content Script und Tabkommunikation; `<all_urls>` wird nicht verwendet.
+
+## Datenschutz
+
+Die Erweiterung nutzt keine internen OpenAI-APIs, Cookies, Tokens, React-Interna, ChatGPT-`localStorage`, ChatGPT-`sessionStorage`, externen Server, Analyse oder Tracking. Sie ruft für Chatinhalte weder `fetch` noch `XMLHttpRequest` auf und protokolliert keine Chatinhalte. Exportdaten entstehen lokal im Browser.
+
+## Bekannte Grenzen
+
+- ChatGPT kann DOM und Selektoren ändern.
+- Nur sichtbare oder durch begrenztes Scrollen normal nachladbare Projektchats werden entdeckt; das Limit beträgt 500.
+- Projektanweisungen werden nur aus bereits zugänglichem DOM gelesen.
+- Nicht normal herunterladbare Dateien fehlen als Binärinhalt.
+- Ein vom Browser unerwartet beendeter Manifest-V3-Service-Worker kann den Export nicht aus gespeicherten Chatinhalten fortsetzen.
+
+## Manuelle Prüfung
+
+1. Normalen `/c/...`-Chat öffnen: nur Einzelchat-Button, unverändertes ZIP.
+2. Projekt öffnen: Name erkannt und Projektbutton sichtbar.
+3. Dialog mit Maus, Tabulator und Escape prüfen; Fokus kehrt zurück.
+4. Mehrere Chats exportieren und sequenzielle inaktive Tabs beobachten.
+5. Fortschritts-, Erfolgs- und Teilfehler-Toasts prüfen.
+6. Abbrechen: Tabs schließen, kein Download.
+7. ZIP-Struktur, Nummerierung, UTF-8, `errors.json` und `complete` prüfen.
+8. Doppelklick: kein doppelter Export oder Download.
+9. SPA-Navigation: keine doppelten Buttons.
+10. Toasts im hellen und dunklen Farbschema prüfen.
+
+Diese Erweiterung ist kein offizielles OpenAI-Produkt.
