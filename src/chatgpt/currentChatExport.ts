@@ -38,5 +38,8 @@ export async function createCurrentChatArchive(conversation: VisibleConversation
     'Bilder und Anhänge sind möglicherweise nicht enthalten.',
     'Diese Erweiterung ist kein offizielles OpenAI-Produkt.',
   ].join('\n'))
-  return { blob: await zip.generateAsync({ type: 'blob', mimeType: 'application/zip' }), filename: createCurrentChatFilename(conversation.title, exportedAt) }
+  return {
+    base64: await zip.generateAsync({ type: 'base64' }),
+    filename: createCurrentChatFilename(conversation.title, exportedAt),
+  }
 }

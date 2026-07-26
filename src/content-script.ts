@@ -1,6 +1,6 @@
 import { readVisibleConversation } from './chatgpt/conversationReader'
 import { createCurrentChatArchive } from './chatgpt/currentChatExport'
-import { downloadArchive } from './services/exportService'
+import type { DownloadArchiveMessage, DownloadArchiveResponse } from './types/extensionMessages'
 
 export const CONTENT_ROOT_ID = 'chat-export-extension-root'
 export const CONTENT_BUTTON_ID = 'chat-export-extension-button'
@@ -25,8 +25,30 @@ export async function exportCurrentConversation(button: HTMLButtonElement): Prom
       setButtonState(button, EMPTY_MESSAGE, false)
       return
     }
-    const archive = await createCurrentChatArchive(conversation)
-    await downloadArchive(archive)
+    let archive: Awaited<ReturnType<typeof createCurrentChatArchive>>
+    try {
+      archive = await createCurrentChatArchive(conversation)
+    } catch {
+      setButtonState(button, 'Die ZIP-Datei konnte nicht erstellt werden.', false)
+      return
+    }
+    const message: DownloadArchiveMessage = {
+      type: 'DOWNLOAD_ARCHIVE',
+      filename: archive.filename,
+      mimeType: 'application/zip',
+      base64: archive.base64,
+    }
+    let response: DownloadArchiveResponse
+    try {
+      response = await chrome.runtime.sendMessage<DownloadArchiveMessage, DownloadArchiveResponse>(message)
+    } catch {
+      setButtonState(button, 'Der Service Worker ist nicht erreichbar.', false)
+      return
+    }
+    if (!response?.ok) {
+      setButtonState(button, response?.error || 'Der Download konnte nicht gestartet werden.', false)
+      return
+    }
     setButtonState(button, 'Download wurde gestartet.', false)
   } catch {
     setButtonState(button, 'Der Export konnte nicht erstellt werden. Bitte versuche es erneut.', false)

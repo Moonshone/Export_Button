@@ -4,14 +4,19 @@ import { resolve } from 'node:path'
 const distDirectory = resolve('dist')
 const manifestPath = resolve(distDirectory, 'manifest.json')
 const contentScriptPath = resolve(distDirectory, 'content-script.js')
+const popupPath = resolve(distDirectory, 'popup.html')
 
-await Promise.all([access(manifestPath), access(contentScriptPath)])
+await Promise.all([access(manifestPath), access(contentScriptPath), access(popupPath)])
 
 const [manifestSource, contentScript] = await Promise.all([
   readFile(manifestPath, 'utf8'),
   readFile(contentScriptPath, 'utf8'),
 ])
 const manifest = JSON.parse(manifestSource)
+
+if (typeof manifest.background?.service_worker !== 'string') {
+  throw new Error('manifest.background.service_worker fehlt.')
+}
 
 const forbiddenPatterns = [
   { label: 'statischer Import', pattern: /(^|[;{}]\s*)import\s+[^('"`][\s\S]*?\sfrom\s*['"]/m },
@@ -31,6 +36,7 @@ if (/\b(?:import|require)\s*(?:\(|[^;]*?from\s*)['"]\.\/?assets\/[^'"]+\.js/.tes
 
 const referencedFiles = new Set([
   manifest.action?.default_popup,
+  manifest.background.service_worker,
   ...(manifest.content_scripts ?? []).flatMap((entry) => [...(entry.js ?? []), ...(entry.css ?? [])]),
 ].filter(Boolean))
 

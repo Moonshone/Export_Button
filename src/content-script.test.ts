@@ -9,9 +9,7 @@ function getButton(): HTMLButtonElement {
 describe('ChatGPT Content Script', () => {
   beforeEach(() => {
     document.body.innerHTML = '<main><article data-message-author-role="user">Hallo</article></main>'
-    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:test') })
-    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-    vi.mocked(chrome.downloads.download).mockReset().mockResolvedValue(1)
+    vi.mocked(chrome.runtime.sendMessage).mockReset().mockResolvedValue({ ok: true, downloadId: 1 })
   })
 
   it('fügt den zugänglichen Button genau einmal ein', () => {
@@ -36,19 +34,33 @@ describe('ChatGPT Content Script', () => {
     const first = exportCurrentConversation(button)
     const second = exportCurrentConversation(button)
     await Promise.all([first, second])
-    expect(chrome.downloads.download).toHaveBeenCalledTimes(1)
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledTimes(1)
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'DOWNLOAD_ARCHIVE', filename: expect.stringMatching(/\.zip$/),
+      mimeType: 'application/zip', base64: expect.any(String),
+    }))
+    expect(chrome.downloads.download).not.toHaveBeenCalled()
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(button).toHaveTextContent('Download wurde gestartet.')
   })
 
-  it('zeigt leere Unterhaltungen und Downloadfehler verständlich an', async () => {
+  it('zeigt leere Unterhaltungen und Service-Worker-Fehler verständlich an', async () => {
     document.querySelector('main')!.innerHTML = ''
     ensureExportButton(); await exportCurrentConversation(getButton())
     expect(getButton()).toHaveTextContent('In der aktuell geöffneten Seite wurde keine Unterhaltung gefunden.')
     document.querySelector('main')!.innerHTML = '<div data-message-author-role="assistant">Antwort</div>'
-    vi.mocked(chrome.downloads.download).mockRejectedValueOnce(new Error('intern'))
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValueOnce({ ok: false, error: 'Der Download konnte nicht gestartet werden.' })
     await exportCurrentConversation(getButton())
-    expect(getButton()).toHaveTextContent('Der Export konnte nicht erstellt werden.')
+    expect(getButton()).toHaveTextContent('Der Download konnte nicht gestartet werden.')
     expect(getButton()).not.toHaveTextContent('intern')
+  })
+
+  it('behandelt einen nicht erreichbaren Service Worker ohne interne Details', async () => {
+    ensureExportButton()
+    vi.mocked(chrome.runtime.sendMessage).mockRejectedValueOnce(new Error('Receiving end does not exist'))
+    await exportCurrentConversation(getButton())
+    expect(getButton()).toHaveTextContent('Der Service Worker ist nicht erreichbar.')
+    expect(getButton()).not.toHaveTextContent('Receiving end')
+    expect(getButton()).toBeEnabled()
   })
 })
