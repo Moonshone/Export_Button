@@ -1,13 +1,16 @@
 import JSZip from 'jszip'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sampleConversations } from '../data/sampleChats'
 import {
   createChatExport,
   createExportFilename,
+  downloadArchive,
   sanitizeFilename,
 } from './exportService'
 
 describe('exportService', () => {
+  beforeEach(() => vi.clearAllMocks())
+
   it('erstellt einen sicheren Dateinamen', () => {
     const date = new Date(2026, 6, 26, 9, 5)
 
@@ -46,9 +49,23 @@ describe('exportService', () => {
       applicationName: 'Lokaler Chat-Export',
       conversationCount: 1,
       messageCount: 2,
-      storageType: 'browser-localStorage',
+      storageType: 'chrome.storage.local',
       includedFiles: ['conversations.json', 'manifest.json', 'README.txt'],
     })
+  })
+
+  it('startet den Download über chrome.downloads.download', async () => {
+    const archive = { blob: new Blob(['zip']), filename: 'chat-export.zip' }
+    await expect(downloadArchive(archive)).resolves.toBe(1)
+    expect(chrome.downloads.download).toHaveBeenCalledWith({
+      url: 'blob:test', filename: 'chat-export.zip', saveAs: true,
+    })
+  })
+
+  it('übersetzt einen Fehler der Download-API verständlich', async () => {
+    vi.mocked(chrome.downloads.download).mockRejectedValueOnce(new Error('intern'))
+    await expect(downloadArchive({ blob: new Blob(), filename: 'chat-export.zip' }))
+      .rejects.toThrow('Download konnte nicht gestartet werden')
   })
 
   it('unterstützt eine leere Chatliste', async () => {

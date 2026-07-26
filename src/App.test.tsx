@@ -1,61 +1,40 @@
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import type { Conversation } from './types/chat'
 
-describe('lokale Chat-Oberfläche', () => {
-  beforeEach(() => localStorage.clear())
+const conversations: Conversation[] = [{
+  id: 'chat-1', title: 'Test', createdAt: '2026-07-26T10:00:00.000Z',
+  updatedAt: '2026-07-26T10:00:00.000Z',
+  messages: [
+    { id: 'm1', role: 'user', content: 'Hallo', createdAt: '2026-07-26T10:00:00.000Z' },
+    { id: 'm2', role: 'assistant', content: 'Hi', createdAt: '2026-07-26T10:01:00.000Z' },
+  ],
+}]
 
-  it('erstellt einen Chat, speichert eine Nachricht und lädt sie erneut', async () => {
-    const user = userEvent.setup()
-    const view = render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Neuen Chat erstellen' }))
-    await user.type(screen.getByLabelText('Nachricht'), 'Hallo{enter}mit Zeilenumbruch')
-    await user.selectOptions(screen.getByLabelText('Rolle'), 'assistant')
-    await user.click(screen.getByRole('button', { name: 'Nachricht hinzufügen' }))
-
-    expect(screen.getByLabelText('Nachricht von Assistent')).toHaveTextContent('Hallo mit Zeilenumbruch')
-    view.unmount()
-    render(<App />)
-    expect(screen.getByLabelText('Nachricht von Assistent')).toBeInTheDocument()
+describe('Erweiterungs-Popup', () => {
+  beforeEach(() => {
+    vi.mocked(chrome.storage.local.get).mockResolvedValue({ conversations })
   })
 
-  it('verhindert leere Nachrichten und kann einen Chat umbenennen', async () => {
-    const user = userEvent.setup()
+  it('rendert Popup, Exportbutton und Lokalitätshinweis', async () => {
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Neuen Chat erstellen' }))
-    expect(screen.getByRole('button', { name: 'Nachricht hinzufügen' })).toBeDisabled()
-    await user.click(screen.getByRole('button', { name: 'Chat umbenennen' }))
-    await user.clear(screen.getByLabelText('Chatname'))
-    await user.type(screen.getByLabelText('Chatname'), 'Mein Projekt')
-    await user.click(screen.getByRole('button', { name: 'Speichern' }))
-    expect(screen.getByRole('heading', { name: 'Mein Projekt' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Lokaler Chat-Export' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Daten exportieren' })).toBeInTheDocument()
+    expect(screen.getByText(/ausschließlich lokal/)).toBeInTheDocument()
+    await waitFor(() => expect(chrome.storage.local.get).toHaveBeenCalledWith('conversations'))
   })
 
-  it('löscht nur nach einer Bestätigung', async () => {
-    const user = userEvent.setup()
-    vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+  it('zeigt Chat- und Nachrichtenanzahl', async () => {
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Neuen Chat erstellen' }))
-    await user.click(screen.getByRole('button', { name: 'Chat löschen' }))
-    expect(screen.getByRole('heading', { name: 'Neuer Chat' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Chat löschen' }))
-    expect(screen.getByRole('heading', { name: 'Deine lokalen Chats' })).toBeInTheDocument()
+    expect(await screen.findByText('1', { selector: 'dd' })).toBeInTheDocument()
+    expect(screen.getByText('2', { selector: 'dd' })).toBeInTheDocument()
   })
 
-  it('erhält Umlaute, Emojis und Codeblöcke als sicheren Text', async () => {
-    const user = userEvent.setup()
+  it('zeigt einen verständlichen Ladefehler', async () => {
+    vi.mocked(chrome.storage.local.get).mockRejectedValueOnce(new Error('intern'))
     render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Neuen Chat erstellen' }))
-    await user.type(
-      screen.getByLabelText('Nachricht'),
-      'Grüße 👋\n```ts\nconst wert = "<script>"\n```',
-    )
-    await user.click(screen.getByRole('button', { name: 'Nachricht hinzufügen' }))
-
-    const message = screen.getByLabelText('Nachricht von Benutzer')
-    expect(message).toHaveTextContent('Grüße 👋')
-    expect(message.querySelector('code')).toHaveTextContent('const wert = "<script>"')
-    expect(message.querySelector('script')).toBeNull()
+    expect(await screen.findByRole('alert')).toHaveTextContent('konnten nicht geladen werden')
+    expect(screen.getByRole('button', { name: 'Daten exportieren' })).toBeDisabled()
   })
 })
