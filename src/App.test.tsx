@@ -42,4 +42,20 @@ describe('lokale Chat-Oberfläche', () => {
     await user.click(screen.getByRole('button', { name: 'Chat löschen' }))
     expect(screen.getByRole('heading', { name: 'Deine lokalen Chats' })).toBeInTheDocument()
   })
+
+  it('erhält Umlaute, Emojis und Codeblöcke als sicheren Text', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Neuen Chat erstellen' }))
+    await user.type(
+      screen.getByLabelText('Nachricht'),
+      'Grüße 👋\n```ts\nconst wert = "<script>"\n```',
+    )
+    await user.click(screen.getByRole('button', { name: 'Nachricht hinzufügen' }))
+
+    const message = screen.getByLabelText('Nachricht von Benutzer')
+    expect(message).toHaveTextContent('Grüße 👋')
+    expect(message.querySelector('code')).toHaveTextContent('const wert = "<script>"')
+    expect(message.querySelector('script')).toBeNull()
+  })
 })

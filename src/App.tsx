@@ -1,4 +1,5 @@
-import { FormEvent, useState } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import type { Conversation, MessageRole } from './types/chat'
 import {
   createConversation,
@@ -25,8 +26,8 @@ function MessageText({ content }: { content: string }) {
 }
 
 function App() {
-  const [chats, setChats] = useState<Conversation[]>(() => loadConversations())
-  const [selectedId, setSelectedId] = useState<string | null>(() => loadConversations()[0]?.id ?? null)
+  const [chats, setChats] = useState<Conversation[]>(loadConversations)
+  const [selectedId, setSelectedId] = useState<string | null>(() => chats[0]?.id ?? null)
   const [message, setMessage] = useState('')
   const [role, setRole] = useState<MessageRole>('user')
   const [isRenaming, setIsRenaming] = useState(false)
