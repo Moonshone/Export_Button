@@ -8,7 +8,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'popup.html'),
-        'content-script': resolve(__dirname, 'src/content-script.ts'),
       },
       output: {
         entryFileNames: '[name].js',
