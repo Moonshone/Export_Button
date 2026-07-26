@@ -7,12 +7,14 @@ export function parseChatGptGptUrl(value: string): ParsedGptUrl | undefined {
     if (parts.length === 2 && parts[0] === 'g' && /^g-[^/]+$/i.test(parts[1]) && !parts[1].startsWith('g-p-')) {
       return { type: 'detail', id: parts[1], url: `${url.origin}${url.pathname}` }
     }
-    const editor = parts.indexOf('gpts')
-    if (editor >= 0) {
-      const tail = parts.slice(editor + 1)
-      if (!tail.length || (tail.length === 1 && ['mine', 'editor', 'discover'].includes(tail[0]))) return { type: 'list', url: `${url.origin}${url.pathname}` }
-      const id = tail.find((part) => !['editor', 'edit', 'configure'].includes(part)) ?? url.searchParams.get('gptId') ?? url.searchParams.get('id')
-      return id || tail.some((part) => ['editor', 'edit', 'configure'].includes(part)) ? { type: 'editor', id: id ?? undefined, url: `${url.origin}${url.pathname}` } : { type: 'list', url: `${url.origin}${url.pathname}` }
+    if (parts[0] === 'gpts') {
+      const editorIndex = parts.findIndex((part, index) => index > 0 && ['editor', 'edit', 'configure'].includes(part))
+      const routeId = editorIndex >= 0 ? parts[editorIndex + 1] : undefined
+      const queryId = url.searchParams.get('gptId') ?? url.searchParams.get('id') ?? undefined
+      const id = routeId || queryId
+      return editorIndex >= 0 && id
+        ? { type: 'editor', id, url: `${url.origin}${url.pathname}` }
+        : { type: 'list', url: `${url.origin}${url.pathname}` }
     }
   } catch { return undefined }
   return undefined

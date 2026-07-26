@@ -44,6 +44,13 @@ describe('kontextabhängiger Exportbutton', () => {
     expect(button()).toBeDisabled()
     renderExportButtonState(button(), 'hidden')
     expect(button()).not.toBeVisible()
+    expect(button()).toBeDisabled()
+    expect(button()).toHaveTextContent('')
+    expect(button()).toHaveAttribute('aria-busy', 'false')
+    expect(button()).toHaveAttribute('aria-label', 'Export auf dieser Seite nicht verfügbar')
+    expect(button()).toHaveAttribute('data-mode', 'hidden')
+    renderExportButtonState(button(), 'gpt-idle')
+    expect(button().hidden).toBe(false)
   })
 
   it('wechselt bei SPA-Navigation zwischen Projekt, Projektchat, Start und Chat', async () => {
@@ -94,6 +101,33 @@ describe('kontextabhängiger Exportbutton', () => {
     document.querySelector('article')?.remove(); updateButtonFromCurrentPageContext(); await new Promise((resolve) => setTimeout(resolve, 0))
     expect(button()).toHaveTextContent('GPT exportieren')
     expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
+  })
+
+  it('verbirgt auf der realistischen GPT-Übersicht denselben permanenten Button vollständig', async () => {
+    window.history.replaceState({}, '', '/gpts')
+    document.body.innerHTML = '<main><header><h1>GPTs erkunden</h1><button>Meine GPTs</button><button>Erstellen</button></header><section><h2>GPTS</h2><p>Entdecke und erstelle individuelle ChatGPT-Versionen.</p><input placeholder="In GPTs suchen"><div><article><h3>Schulaufgabengenerator-Quizz Mathematik</h3></article><article><h3>Storyboard Produzent</h3></article></div></section></main>'
+    startContentScript()
+    const permanentButton = button()
+    expect(permanentButton.hidden).toBe(true)
+    expect(permanentButton).not.toBeVisible()
+    expect(permanentButton).toHaveTextContent('')
+    expect(permanentButton).toHaveAttribute('data-mode', 'hidden')
+    expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
+    expect(shadow().querySelectorAll('.actions > button')).toHaveLength(1)
+
+    window.history.pushState({}, '', '/g/g-abc-mein-gpt')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(button()).toBe(permanentButton)
+    expect(button().hidden).toBe(false)
+    expect(button()).toHaveTextContent('GPT exportieren')
+
+    window.history.replaceState({}, '', '/gpts/mine')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(button()).toBe(permanentButton)
+    expect(button()).not.toBeVisible()
+    expect(button()).toHaveTextContent('')
+    expect(document.querySelectorAll(`#${CONTENT_ROOT_ID}`)).toHaveLength(1)
+    expect(shadow().querySelectorAll('.actions > button')).toHaveLength(1)
   })
 
   it('startet einen Chat-Download bei Doppelklick nur einmal', async () => {
@@ -170,5 +204,6 @@ describe('kontextabhängiger Exportbutton', () => {
     expect(styles).toContain('background:#27272a')
     expect(styles).toContain('background:#18181b')
     expect(styles).toContain('.export-action.cancel-action{border-color:#9f2d26;background:#9f2d26}')
+    expect(styles).toContain('.export-action[hidden]{display:none !important}')
   })
 })

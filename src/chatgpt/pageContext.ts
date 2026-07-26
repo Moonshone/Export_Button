@@ -67,18 +67,21 @@ export function detectChatGptPageContext(documentRef: Document = document): Chat
   const url = chatGptUrl(documentRef)
   if (!url) return { type: 'unsupported' }
 
-  const chat = parseChatGptChatUrl(url.href)
   const visibleMessages = Array.from(documentRef.querySelectorAll(GPT_SELECTORS.chatMessage)).some(isVisible)
+  const chat = parseChatGptChatUrl(url.href)
   const gpt = parseChatGptGptUrl(url.href)
   if (chat || (gpt?.type === 'detail' && visibleMessages)) return { type: 'chat', chatUrl: chat?.url ?? url.href }
 
-  if (gpt && gpt.type !== 'list') {
-    const name = readVisibleGptName(findVisibleGptRoot(documentRef), gpt)
-    return gpt.type === 'editor' ? { type: 'gpt-editor', gptId: gpt.id, gptName: name, gptUrl: gpt.url } : { type: 'gpt-detail', gptId: gpt.id, gptName: name, gptUrl: gpt.url, accessLevel: 'unknown' }
-  }
-
   const project = parseProjectOverviewUrl(url.href)
-  if (!project) return { type: 'unsupported' }
+  if (!project && gpt?.type === 'detail') {
+    const name = readVisibleGptName(findVisibleGptRoot(documentRef), gpt)
+    return { type: 'gpt-detail', gptId: gpt.id, gptName: name, gptUrl: gpt.url, accessLevel: 'unknown' }
+  }
+  if (!project && gpt?.type === 'editor') {
+    const name = readVisibleGptName(findVisibleGptRoot(documentRef), gpt)
+    return { type: 'gpt-editor', gptId: gpt.id, gptName: name, gptUrl: gpt.url }
+  }
+  if (gpt?.type === 'list' || !project) return { type: 'unsupported' }
 
   const main = Array.from(documentRef.querySelectorAll('main')).find(isVisible)
   if (!main) return { type: 'unsupported' }
