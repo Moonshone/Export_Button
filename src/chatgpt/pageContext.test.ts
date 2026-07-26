@@ -34,6 +34,23 @@ describe('ChatGPT-Seitenkontext', () => {
     expect(detectChatGptPageContext()).toEqual({ type: 'unsupported' })
   })
 
+  it('erkennt die reale GPT-Detailroute ohne technische Testattribute', () => {
+    window.history.replaceState({}, '', '/g/g-69de136277f4819189aa21247ccb1538-english-lerncoach')
+    document.body.innerHTML = '<div role="main"><header><button>English Lerncoach</button></header><section><div aria-hidden="true"></div><h1>English Lerncoach</h1><p>Von Ma Kad</p><p>Ich helfe deutschsprachigen Lernenden, Englisch strukturiert zu verbessern.</p><div data-starter-area><button>Starte meinen Englisch-Einstufungstest.</button><button>Ich habe schon ein Profil. Mach mit der nächsten Lektion...</button></div><div contenteditable="true" data-placeholder="ChatGPT fragen"></div></section></div>'
+    expect(detectChatGptPageContext()).toEqual({ type: 'gpt-detail', gptId: 'g-69de136277f4819189aa21247ccb1538-english-lerncoach', gptName: 'English Lerncoach', gptUrl: 'https://chatgpt.com/g/g-69de136277f4819189aa21247ccb1538-english-lerncoach', accessLevel: 'unknown' })
+  })
+
+  it('verwendet auf der GPT-Route den Slug, solange der Titel noch lädt', () => {
+    window.history.replaceState({}, '', '/g/g-69de136277f4819189aa21247ccb1538-english-lerncoach')
+    expect(detectChatGptPageContext()).toMatchObject({ type: 'gpt-detail', gptName: 'English Lerncoach' })
+  })
+
+  it('priorisiert sichtbare Nachrichten auf einer GPT-Route als Chat', () => {
+    window.history.replaceState({}, '', '/g/g-abc')
+    document.body.innerHTML = '<div role="main"><h1>GPT</h1><article data-message-author-role="user">Hallo</article><article data-message-author-role="assistant">Hallo!</article></div>'
+    expect(detectChatGptPageContext()).toEqual({ type: 'chat', chatUrl: 'https://chatgpt.com/g/g-abc' })
+  })
+
   it.each(['/', '/settings'])('lehnt die nicht unterstützte Route %s ab', (path) => {
     window.history.replaceState({}, '', path)
     document.body.innerHTML = '<main><h1>ChatGPT</h1></main>'

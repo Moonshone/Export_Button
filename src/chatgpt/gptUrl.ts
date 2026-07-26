@@ -4,8 +4,9 @@ export function parseChatGptGptUrl(value: string): ParsedGptUrl | undefined {
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.hostname !== 'chatgpt.com' || url.port) return undefined
     const parts = url.pathname.split('/').filter(Boolean)
-    const g = parts.indexOf('g')
-    if (g >= 0 && parts[g + 1] && !parts[g + 1].startsWith('g-p-') && !parts.includes('c')) return { type: 'detail', id: parts[g + 1], url: `${url.origin}${url.pathname}` }
+    if (parts.length === 2 && parts[0] === 'g' && /^g-[^/]+$/i.test(parts[1]) && !parts[1].startsWith('g-p-')) {
+      return { type: 'detail', id: parts[1], url: `${url.origin}${url.pathname}` }
+    }
     const editor = parts.indexOf('gpts')
     if (editor >= 0) {
       const tail = parts.slice(editor + 1)

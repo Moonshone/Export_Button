@@ -2,6 +2,7 @@ import { parseChatGptChatUrl, parseProjectOverviewUrl } from './chatUrl'
 import { PROJECT_SELECTORS } from './projectSelectors'
 import { parseChatGptGptUrl } from './gptUrl'
 import { GPT_SELECTORS } from './gptSelectors'
+import { findVisibleGptRoot, readVisibleGptName } from './gptReader'
 
 export type ChatGptPageContext =
   | { type: 'chat'; chatUrl: string }
@@ -68,14 +69,12 @@ export function detectChatGptPageContext(documentRef: Document = document): Chat
 
   const chat = parseChatGptChatUrl(url.href)
   const visibleMessages = Array.from(documentRef.querySelectorAll(GPT_SELECTORS.chatMessage)).some(isVisible)
-  if (chat || (visibleMessages && /\/c\//.test(url.pathname))) return { type: 'chat', chatUrl: chat?.url ?? url.href }
-
   const gpt = parseChatGptGptUrl(url.href)
+  if (chat || (gpt?.type === 'detail' && visibleMessages)) return { type: 'chat', chatUrl: chat?.url ?? url.href }
+
   if (gpt && gpt.type !== 'list') {
-    const main = Array.from(documentRef.querySelectorAll('main')).find(isVisible)
-    const name = normalized(main?.querySelector(GPT_SELECTORS.name)?.textContent)
-    const signal = main && (name || main.querySelector(`${GPT_SELECTORS.description}, ${GPT_SELECTORS.instructions}, ${GPT_SELECTORS.starter}`))
-    if (signal) return gpt.type === 'editor' ? { type: 'gpt-editor', gptId: gpt.id, gptName: name ?? 'ChatGPT-GPT', gptUrl: gpt.url } : { type: 'gpt-detail', gptId: gpt.id, gptName: name ?? 'ChatGPT-GPT', gptUrl: gpt.url, accessLevel: 'unknown' }
+    const name = readVisibleGptName(findVisibleGptRoot(documentRef), gpt)
+    return gpt.type === 'editor' ? { type: 'gpt-editor', gptId: gpt.id, gptName: name, gptUrl: gpt.url } : { type: 'gpt-detail', gptId: gpt.id, gptName: name, gptUrl: gpt.url, accessLevel: 'unknown' }
   }
 
   const project = parseProjectOverviewUrl(url.href)
